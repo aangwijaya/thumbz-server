@@ -1,0 +1,366 @@
+// THUMBZ database schema (plan §6).
+// All tables live in the `public` schema. UUIDs default to gen_random_uuid().
+// The FK from profiles.id to auth.users is added in the init migration SQL
+// (auth schema is Supabase-managed and not modeled here).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum user_role {
+  user
+  admin
+}
+
+enum tournament_status {
+  upcoming
+  ongoing
+  completed
+}
+
+enum player_role {
+  gold
+  mid
+  exp
+  jungle
+  roam
+  flex
+  coach
+}
+
+enum match_stage {
+  group_stage
+  regular_season
+  playoffs
+  semifinal
+  third_place
+  grand_final
+}
+
+enum match_status {
+  scheduled
+  live
+  completed
+  cancelled
+  postponed
+}
+
+enum video_type {
+  replay
+  highlight
+  vod
+}
+
+enum favorite_type {
+  team
+  player
+}
+
+enum match_item_phase {
+  phase2
+  phase3
+}
+
+model Profile {
+  id         String    @id @db.Uuid
+  username   String?   @unique
+  avatar_url String?
+  role       user_role @default(user)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  favorites    Favorite[]
+  watchHistory WatchHistory[]
+
+  @@map("profiles")
+}
+
+model Tournament {
+  id          String            @id @default(uuid()) @db.Uuid
+  slug        String            @unique
+  name        String
+  status      tournament_status @default(upcoming)
+  region      String
+  start_date  DateTime          @db.Date
+  end_date    DateTime          @db.Date
+  prize_pool  String?
+  description String?
+  logo_url    String?
+  featured    Boolean           @default(false)
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+
+  matches Match[]
+
+  @@index([status, start_date(sort: Desc)])
+  @@map("tournaments")
+}
+
+model Team {
+  id              String   @id @default(uuid()) @db.Uuid
+  slug            String   @unique
+  name            String
+  region          String
+  logo_url        String?
+  color_primary   String?
+  color_secondary String?
+  description     String?
+  founded_year    Int?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  players             Player[]
+  matchTeamA          Match[]                @relation("MatchTeamA")
+  matchTeamB          Match[]                @relation("MatchTeamB")
+  matchWon            Match[]                @relation("MatchWinner")
+  teamStatistics      MatchTeamStatistic[]
+  playerMatchStats    PlayerMatchStatistic[]
+  MatchGoldSnapshot   MatchGoldSnapshot[]
+  PlayerMatchSnapshot PlayerMatchSnapshot[]
+  MatchItemEvent      MatchItemEvent[]
+  MatchEvent          MatchEvent[]
+
+  @@index([name])
+  @@map("teams")
+}
+
+model Player {
+  id         String      @id @default(uuid()) @db.Uuid
+  slug       String      @unique
+  nickname   String
+  real_name  String?
+  role       player_role
+  country    String?
+  team_id    String?     @db.Uuid
+  photo_url  String?
+  is_active  Boolean     @default(true)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  team                Team?                  @relation(fields: [team_id], references: [id], onDelete: SetNull)
+  statistics          PlayerMatchStatistic[]
+  PlayerMatchSnapshot PlayerMatchSnapshot[]
+  MatchItemEvent      MatchItemEvent[]
+  MatchEvent          MatchEvent[]
+
+  @@index([team_id])
+  @@index([nickname])
+  @@map("players")
+}
+
+model Match {
+  id             String       @id @default(uuid()) @db.Uuid
+  tournament_id  String?      @db.Uuid
+  stage          match_stage?
+  round          Int?
+  group_name     String?
+  best_of        Int          @default(1)
+  game_number    Int?
+  team_a_id      String       @db.Uuid
+  team_b_id      String       @db.Uuid
+  score_a        Int?
+  score_b        Int?
+  winner_team_id String?      @db.Uuid
+  status         match_status @default(scheduled)
+  scheduled_at   DateTime
+  started_at     DateTime?
+  ended_at       DateTime?
+  stream_url     String?
+  thumbnail_url  String?
+  viewer_count   Int          @default(0)
+  featured       Boolean      @default(false)
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  tournament          Tournament?            @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
+  teamA               Team                   @relation("MatchTeamA", fields: [team_a_id], references: [id], onDelete: Restrict)
+  teamB               Team                   @relation("MatchTeamB", fields: [team_b_id], references: [id], onDelete: Restrict)
+  winner              Team?                  @relation("MatchWinner", fields: [winner_team_id], references: [id], onDelete: Restrict)
+  teamStatistics      MatchTeamStatistic[]
+  playerStatistics    PlayerMatchStatistic[]
+  videos              Video[]
+  watchHistory        WatchHistory[]
+  MatchGoldSnapshot   MatchGoldSnapshot[]
+  PlayerMatchSnapshot PlayerMatchSnapshot[]
+  MatchItemEvent      MatchItemEvent[]
+  MatchEvent          MatchEvent[]
+
+  @@index([status, scheduled_at])
+  @@index([tournament_id])
+  @@index([team_a_id])
+  @@index([team_b_id])
+  @@map("matches")
+}
+
+model MatchTeamStatistic {
+  id                    String @id @default(uuid()) @db.Uuid
+  match_id              String @db.Uuid
+  team_id               String @db.Uuid
+  kills                 Int    @default(0)
+  deaths                Int    @default(0)
+  assists               Int    @default(0)
+  gold                  Int    @default(0)
+  towers_destroyed      Int    @default(0)
+  game_duration_seconds Int?
+  details               Json   @default("{}")
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, team_id])
+  @@index([team_id])
+  @@map("match_team_statistics")
+}
+
+model PlayerMatchStatistic {
+  id           String  @id @default(uuid()) @db.Uuid
+  match_id     String  @db.Uuid
+  player_id    String  @db.Uuid
+  team_id      String  @db.Uuid
+  kills        Int     @default(0)
+  deaths       Int     @default(0)
+  assists      Int     @default(0)
+  gold         Int     @default(0)
+  damage       Int     @default(0)
+  damage_taken Int     @default(0)
+  level        Int?
+  hero_picked  String?
+  mvp          Boolean @default(false)
+  details      Json    @default("{}")
+
+  match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
+  team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, player_id])
+  @@index([player_id])
+  @@index([team_id, match_id])
+  @@map("player_match_statistics")
+}
+
+model Video {
+  id               String     @id @default(uuid()) @db.Uuid
+  match_id         String?    @db.Uuid
+  title            String
+  type             video_type
+  url              String
+  thumbnail_url    String?
+  duration_seconds Int?
+  published_at     DateTime   @default(now())
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
+
+  match Match? @relation(fields: [match_id], references: [id], onDelete: SetNull)
+
+  @@index([type, published_at(sort: Desc)])
+  @@map("videos")
+}
+
+model Favorite {
+  user_id     String        @db.Uuid
+  entity_type favorite_type
+  entity_id   String        @db.Uuid
+  created_at  DateTime      @default(now())
+
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, entity_type, entity_id])
+  @@index([entity_type, entity_id])
+  @@map("favorites")
+}
+
+model WatchHistory {
+  user_id          String   @db.Uuid
+  match_id         String   @db.Uuid
+  watched_at       DateTime @default(now())
+  duration_seconds Int?
+
+  user  Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  match Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, match_id])
+  @@index([user_id, watched_at(sort: Desc)])
+  @@map("watch_history")
+}
+
+model MatchGoldSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  match_id    String   @db.Uuid
+  team_id     String   @db.Uuid
+  gold        Int      @default(0)
+  recorded_at DateTime @default(now())
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, team_id, recorded_at])
+  @@index([match_id, recorded_at])
+  @@map("match_gold_snapshots")
+}
+
+model PlayerMatchSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  match_id     String   @db.Uuid
+  player_id    String   @db.Uuid
+  team_id      String   @db.Uuid
+  kills        Int      @default(0)
+  deaths       Int      @default(0)
+  assists      Int      @default(0)
+  gold         Int      @default(0)
+  damage       Int      @default(0)
+  damage_taken Int      @default(0)
+  level        Int?
+  recorded_at  DateTime @default(now())
+
+  match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
+  team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, player_id, recorded_at])
+  @@index([match_id, recorded_at])
+  @@map("player_match_snapshots")
+}
+
+model MatchItemEvent {
+  id           String           @id @default(uuid()) @db.Uuid
+  match_id     String           @db.Uuid
+  player_id    String           @db.Uuid
+  team_id      String           @db.Uuid
+  item_id      String
+  item_name    String
+  phase        match_item_phase
+  slot         Int?
+  purchased_at DateTime         @default(now())
+
+  match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
+  team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, player_id, item_name, purchased_at])
+  @@index([match_id, purchased_at])
+  @@map("match_item_events")
+}
+
+model MatchEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  match_id    String   @db.Uuid
+  team_id     String?  @db.Uuid
+  player_id   String?  @db.Uuid
+  event_type  String
+  title       String
+  details     Json     @default("{}")
+  occurred_at DateTime @default(now())
+
+  match  Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  team   Team?   @relation(fields: [team_id], references: [id], onDelete: Restrict)
+  player Player? @relation(fields: [player_id], references: [id], onDelete: Restrict)
+
+  @@index([match_id, occurred_at])
+  @@map("match_events")
+}
