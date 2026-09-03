@@ -68,9 +68,12 @@ Migrations encode application-layer enforcement:
   enforces auth/authz itself via guards.
 - Referential checks (`CHECK`), enums, and FKs live in the schema.
 
-Seed output (browsable demo data): 3 tournaments, 8 teams, 40 players,
-43 matches (incl. 3 live with full economy/live-stats/equipment/events),
-20 videos. `npx prisma db seed` cleans and recreates; it never touches
+Seed output (browsable demo data): 3 tournaments, 14 teams, 70 players,
+~98 matches (incl. 3 live with full economy/live-stats/equipment/events,
+language broadcast variants and league key-art thumbnails), 20 videos.
+MPL ID runs a 9-team double round robin; MPL PH runs a 4-team round robin
+(Fnatic ONIC PH, AP.Bren, Aurora Gaming, Falcons) with real team branding
+(logos served via the wsrv/imagekit image proxy). `npx prisma db seed` cleans and recreates; it never touches
 user-scoped data (favorites/history) beyond cleanup of its own fixture slugs.
 Optional env `SEED_ADMIN_ID` (with `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
 to fetch the matching user) creates the `admin` profile; a default

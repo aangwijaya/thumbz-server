@@ -569,4 +569,73 @@ describe('AdminMatchesService live + statistics (integration, local Postgres)', 
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  describe('broadcasts endpoint', () => {
+    it('replaces the variant set and orders by viewer_count desc', async () => {
+      const { data } = await adminMatches.upsertBroadcasts(matchId, [
+        {
+          language: 'en',
+          stream_url: 'https://e2e.example.com/b-en.m3u8',
+          viewer_count: 900,
+        },
+        { language: 'id', stream_url: 'https://e2e.example.com/b-id.m3u8' },
+      ]);
+      expect(data).toHaveLength(2);
+      expect(data[0]).toEqual({
+        language: 'en',
+        stream_url: 'https://e2e.example.com/b-en.m3u8',
+        viewer_count: 900,
+      });
+      expect(data[1]).toEqual({
+        language: 'id',
+        stream_url: 'https://e2e.example.com/b-id.m3u8',
+        viewer_count: 0,
+      });
+    });
+
+    it('is idempotent for an identical submission', async () => {
+      await adminMatches.upsertBroadcasts(matchId, [
+        {
+          language: 'en',
+          stream_url: 'https://e2e.example.com/b-en.m3u8',
+          viewer_count: 900,
+        },
+      ]);
+      const { data } = await adminMatches.upsertBroadcasts(matchId, [
+        {
+          language: 'en',
+          stream_url: 'https://e2e.example.com/b-en.m3u8',
+          viewer_count: 900,
+        },
+      ]);
+      expect(data).toHaveLength(1);
+      expect(data[0]).toEqual({
+        language: 'en',
+        stream_url: 'https://e2e.example.com/b-en.m3u8',
+        viewer_count: 900,
+      });
+    });
+
+    it('clears all variants with an empty list', async () => {
+      const { data } = await adminMatches.upsertBroadcasts(matchId, []);
+      expect(data).toEqual([]);
+    });
+
+    it('rejects duplicate languages for the same match', async () => {
+      await expect(
+        adminMatches.upsertBroadcasts(matchId, [
+          { language: 'en', stream_url: 'https://e2e.example.com/x.m3u8' },
+          { language: 'en', stream_url: 'https://e2e.example.com/y.m3u8' },
+        ]),
+      ).rejects.toBeInstanceOf(BusinessRuleException);
+    });
+
+    it('throws 404 for an unknown match', async () => {
+      await expect(
+        adminMatches.upsertBroadcasts('00000000-0000-4000-8000-000000000000', [
+          { language: 'en', stream_url: 'https://e2e.example.com/z.m3u8' },
+        ]),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
 });

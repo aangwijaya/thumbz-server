@@ -18,6 +18,7 @@ describe('Home (e2e)', () => {
   let team1Id: string;
   let team2Id: string;
   let teamOldId: string;
+  let team3Id: string;
   let featuredLiveId: string;
   let live2Id: string;
   const idsToClean: string[] = [];
@@ -69,6 +70,14 @@ describe('Home (e2e)', () => {
       },
     });
     teamOldId = teamOld.id;
+    const team3 = await prisma.team.create({
+      data: {
+        slug: 'e2e-home-t3',
+        name: 'E2E Home T3',
+        region: 'e2e-home-region',
+      },
+    });
+    team3Id = team3.id;
 
     const featured = await prisma.match.create({
       data: {
@@ -99,8 +108,12 @@ describe('Home (e2e)', () => {
     live2Id = live2.id;
     idsToClean.push(live2Id);
 
-    // popular teams: team1 has 5 recent completed wins, team2 has 2
-    for (let i = 0; i < 5; i++) {
+    // popular teams: "most completed matches played in the last 90 days".
+    // The seeded MPL ID league now saturates the top 8 (leaders ~18 played),
+    // so fixture teams must exceed that: team1 plays 22, team2 19 (each above
+    // any seeded team), with team1 strictly ahead of team2 via extra matches
+    // against a third team. team3 stays far below the threshold.
+    for (let i = 0; i < 16; i++) {
       const m = await prisma.match.create({
         data: {
           tournament_id: tournamentId,
@@ -122,12 +135,38 @@ describe('Home (e2e)', () => {
           team_b_id: team2Id,
           status: 'completed',
           winner_team_id: team2Id,
-          scheduled_at: new Date(now - (i + 6) * day),
-          ended_at: new Date(now - (i + 6) * day + hour),
+          scheduled_at: new Date(now - (i + 20) * day),
+          ended_at: new Date(now - (i + 20) * day + hour),
         },
       });
       idsToClean.push(m.id);
     }
+    for (let i = 0; i < 4; i++) {
+      const m = await prisma.match.create({
+        data: {
+          tournament_id: tournamentId,
+          team_a_id: team1Id,
+          team_b_id: team3Id,
+          status: 'completed',
+          winner_team_id: team1Id,
+          scheduled_at: new Date(now - (i + 24) * day),
+          ended_at: new Date(now - (i + 24) * day + hour),
+        },
+      });
+      idsToClean.push(m.id);
+    }
+    const t2v3 = await prisma.match.create({
+      data: {
+        tournament_id: tournamentId,
+        team_a_id: team2Id,
+        team_b_id: team3Id,
+        status: 'completed',
+        winner_team_id: team2Id,
+        scheduled_at: new Date(now - 30 * day),
+        ended_at: new Date(now - 30 * day + hour),
+      },
+    });
+    idsToClean.push(t2v3.id);
 
     // teamOld played 6 completed matches but all older than 90 days
     for (let i = 0; i < 6; i++) {
@@ -188,7 +227,7 @@ describe('Home (e2e)', () => {
     await prisma.video.deleteMany({ where: { id: { in: idsToClean } } });
     await prisma.match.deleteMany({ where: { id: { in: idsToClean } } });
     await prisma.team.deleteMany({
-      where: { id: { in: [team1Id, team2Id, teamOldId] } },
+      where: { id: { in: [team1Id, team2Id, teamOldId, team3Id] } },
     });
     await prisma.tournament.delete({ where: { id: tournamentId } });
     await app.close();

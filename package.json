@@ -76,7 +76,8 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
-    "testTimeout": 30000
+    "testTimeout": 30000,
+    "maxWorkers": 6
   },
   "allowScripts": {
     "prisma@6.19.3": true,

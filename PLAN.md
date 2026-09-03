@@ -373,6 +373,21 @@ Unique `(match_id, player_id, item_name, purchased_at)`. Index `(match_id, purch
 
 No unique constraint (duplicates tolerated on retry). Index `(match_id, occurred_at)`.
 
+#### `match_broadcasts`
+
+Language broadcast variants of a live match (approved contract change: FE needs per-language feeds — MPL ID `id`+`en`, MPL PH `tl`+`en`, MPL MY `ms`+`en`, ... — rendered as distinct list entries).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `match_id` | uuid | FK → matches (CASCADE) |
+| `language` | enum `broadcast_language` | `en \| id \| ms \| tl` (ISO 639-1) |
+| `stream_url` | text | https only (validated at API) |
+| `viewer_count` | int, default 0 | per-variant viewers, informational |
+| `created_at` / `updated_at` | timestamptz | |
+
+Unique `(match_id, language)` (one feed per language per match). Replace-only via `PUT /admin/matches/:id/broadcasts`; embedded as `broadcasts` (ordered `viewer_count` desc) in every `MatchSummary`/`MatchDetail` where `status = "live"`, plus `GET /matches/:id/broadcasts`. `matches.viewer_count` remains the aggregate ranking number.
+
 ### 6.2 Deliberately NOT modeled
 
 - `standings` table — computed from completed matches.

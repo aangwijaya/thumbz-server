@@ -13,7 +13,18 @@ const prisma = new PrismaClient();
 // all previously seeded rows first, so the script is idempotent in outcome.
 // ---------------------------------------------------------------------------
 
-const SEED_VIDEO_PREFIX = 'https://cdn.example.com/';
+// Placeholder media: picsum.photos serves deterministic images per seed key
+// (example.com hosts never resolve — RFC 2606). The mux test stream is a
+// public playable HLS so stream_url stays testable end-to-end.
+const seedImage = (seed: string, width = 640, height = 360): string =>
+  `https://picsum.photos/seed/${encodeURIComponent(seed)}/${width}/${height}`;
+const SEED_STREAM_URL = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+// Live-match hero thumbnails hosted in the project's Supabase Storage bucket
+// `media` (public): https://<ref>.supabase.co/storage/v1/object/public/media/...
+const SEED_LIVE_THUMB_ID =
+  'https://qshjcszsvsgwpcgggkiv.supabase.co/storage/v1/object/public/media/match-thumbs/mpl-indonesia.jpg';
+const SEED_LIVE_THUMB_PH =
+  'https://qshjcszsvsgwpcgggkiv.supabase.co/storage/v1/object/public/media/match-thumbs/mpl-philippines.jpg';
 
 const TOURNAMENTS: Array<{
   slug: string;
@@ -46,7 +57,7 @@ const TOURNAMENTS: Array<{
     start: '2026-08-08',
     end: '2026-11-02',
     prize: '350,000 USD',
-    featured: false,
+    featured: true,
     description:
       'The premier Mobile Legends professional league of the Philippines.',
   },
@@ -71,14 +82,21 @@ const TEAMS: Array<{
   color_secondary: string | null;
   founded_year: number | null;
   description: string | null;
+  logo?: string;
 }> = [
-  { slug: 'onic', name: 'ONIC Esports', region: 'Indonesia', color_primary: '#F5C518', color_secondary: '#0A0A0A', founded_year: 2018, description: 'Twice MPL Indonesia champions.' },
-  { slug: 'rrq', name: 'RRQ Hoshi', region: 'Indonesia', color_primary: '#7B2EFF', color_secondary: null, founded_year: 2017, description: 'One of the most decorated Indonesian teams.' },
-  { slug: 'evos', name: 'EVOS Glory', region: 'Indonesia', color_primary: '#1E90FF', color_secondary: null, founded_year: 2016, description: 'Legacy Indonesian powerhouse.' },
-  { slug: 'btr', name: 'Bigetron Alpha', region: 'Indonesia', color_primary: '#E53935', color_secondary: null, founded_year: 2019, description: 'The Alpha squad from Bandung.' },
-  { slug: 'tlid', name: 'Team Liquid ID', region: 'Indonesia', color_primary: '#00A9E0', color_secondary: null, founded_year: 2023, description: 'Indonesian branch of Team Liquid.' },
-  { slug: 'fnop', name: 'Fnatic ONIC PH', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'The Philippine super team.' },
-  { slug: 'falcons', name: 'Falcons AP.Bren', region: 'Philippines', color_primary: '#B8860B', color_secondary: null, founded_year: 2023, description: 'Falcons AP.Bren partnership.' },
+  { slug: 'onic', name: 'ONIC Esports', region: 'Indonesia', color_primary: '#F5C518', color_secondary: '#0A0A0A', founded_year: 2018, description: 'Twice MPL Indonesia champions.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/onic-b-256.png' },
+  { slug: 'rrq', name: 'RRQ Hoshi', region: 'Indonesia', color_primary: '#7B2EFF', color_secondary: null, founded_year: 2017, description: 'One of the most decorated Indonesian teams.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/rrq-500.png' },
+  { slug: 'evos', name: 'EVOS Legends', region: 'Indonesia', color_primary: '#1E90FF', color_secondary: null, founded_year: 2016, description: 'Legacy Indonesian powerhouse.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/evos-500.png' },
+  { slug: 'btr', name: 'Bigetron by Vitality', region: 'Indonesia', color_primary: '#E53935', color_secondary: null, founded_year: 2019, description: 'The Alpha squad from Bandung.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/btr_vit.png' },
+  { slug: 'tlid', name: 'Team Liquid ID', region: 'Indonesia', color_primary: '#00A9E0', color_secondary: null, founded_year: 2023, description: 'Indonesian branch of Team Liquid.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/TLID-Primary500x500.png' },
+  { slug: 'ae', name: 'Alter Ego', region: 'Indonesia', color_primary: '#E91E63', color_secondary: null, founded_year: 2020, description: 'Energetic Jakarta contenders.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/ae-256.png' },
+  { slug: 'dewa', name: 'Dewa United Esports', region: 'Indonesia', color_primary: '#16A34A', color_secondary: null, founded_year: 2020, description: 'Dewa United Esports from Jakarta.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/dewa-united-500.png' },
+  { slug: 'geek', name: 'Geek Fam ID', region: 'Indonesia', color_primary: '#F59E0B', color_secondary: null, founded_year: 2019, description: 'Geek Fam Indonesian roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/geek-500.png' },
+  { slug: 'navi', name: 'NAVI', region: 'Indonesia', color_primary: '#FDD835', color_secondary: '#0A0A0A', founded_year: 2021, description: 'NAVI Indonesian division.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/NAVI-2.png' },
+  { slug: 'fnop', name: 'Fnatic ONIC PH', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'The Philippine super team.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/onicph-bw-400.webp' },
+  { slug: 'apbren', name: 'AP.Bren', region: 'Philippines', color_primary: '#B8860B', color_secondary: null, founded_year: 2023, description: 'Former Falcons AP.Bren, now competing as AP.Bren.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/apbren-400.webp' },
+  { slug: 'aurora', name: 'Aurora Gaming', region: 'Philippines', color_primary: '#22D3EE', color_secondary: null, founded_year: 2022, description: 'Rising Philippine organisation.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/aurora-gaming-400.webp' },
+  { slug: 'falcons', name: 'Falcons', region: 'Philippines', color_primary: '#CA8A04', color_secondary: null, founded_year: 2025, description: 'Falcons Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/falcon-400.webp' },
   { slug: 'srg', name: 'Selangor Red Giants', region: 'Malaysia', color_primary: '#D32F2F', color_secondary: null, founded_year: 2019, description: 'Malaysian champions.' },
 ];
 
@@ -121,18 +139,54 @@ const PLAYERS: Array<{
   { slug: 'faviannn', nickname: 'Faviannn', role: 'jungle', country: 'Indonesia', team: 'tlid' },
   { slug: 'ridd', nickname: 'Ridd', role: 'exp', country: 'Indonesia', team: 'tlid' },
   { slug: 'tlid-coach', nickname: 'SaintDeLucaz', role: 'coach', country: 'Indonesia', team: 'tlid' },
+  // ALTER EGO
+  { slug: 'damar', nickname: 'Damar', role: 'gold', country: 'Indonesia', team: 'ae' },
+  { slug: 'reza', nickname: 'Reza', role: 'mid', country: 'Indonesia', team: 'ae' },
+  { slug: 'bagus', nickname: 'Bagus', role: 'jungle', country: 'Indonesia', team: 'ae' },
+  { slug: 'fitra', nickname: 'Fitra', role: 'exp', country: 'Indonesia', team: 'ae' },
+  { slug: 'ae-coach', nickname: 'Nezz', role: 'coach', country: 'Indonesia', team: 'ae' },
+  // DEWA UNITED
+  { slug: 'nanda', nickname: 'Nanda', role: 'gold', country: 'Indonesia', team: 'dewa' },
+  { slug: 'rizky', nickname: 'Rizky', role: 'mid', country: 'Indonesia', team: 'dewa' },
+  { slug: 'bayu', nickname: 'Bayu', role: 'jungle', country: 'Indonesia', team: 'dewa' },
+  { slug: 'gilang', nickname: 'Gilang', role: 'exp', country: 'Indonesia', team: 'dewa' },
+  { slug: 'dewa-coach', nickname: 'Raffi', role: 'coach', country: 'Indonesia', team: 'dewa' },
+  // GEEK FAM
+  { slug: 'kevin', nickname: 'Kevin', role: 'gold', country: 'Indonesia', team: 'geek' },
+  { slug: 'agung', nickname: 'Agung', role: 'mid', country: 'Indonesia', team: 'geek' },
+  { slug: 'dimas', nickname: 'Dimas', role: 'jungle', country: 'Indonesia', team: 'geek' },
+  { slug: 'farhan', nickname: 'Farhan', role: 'exp', country: 'Indonesia', team: 'geek' },
+  { slug: 'geek-coach', nickname: 'Sonny', role: 'coach', country: 'Indonesia', team: 'geek' },
+  // NAVI
+  { slug: 'andri', nickname: 'Andri', role: 'gold', country: 'Indonesia', team: 'navi' },
+  { slug: 'fajar', nickname: 'Fajar', role: 'mid', country: 'Indonesia', team: 'navi' },
+  { slug: 'ihsan', nickname: 'Ihsan', role: 'jungle', country: 'Indonesia', team: 'navi' },
+  { slug: 'rivaldo', nickname: 'Rivaldo', role: 'exp', country: 'Indonesia', team: 'navi' },
+  { slug: 'navi-coach', nickname: 'Dion', role: 'coach', country: 'Indonesia', team: 'navi' },
   // FNOP
   { slug: 'kelra', nickname: 'Kelra', role: 'gold', country: 'Philippines', team: 'fnop' },
   { slug: 'superfrince', nickname: 'Super Frince', role: 'mid', country: 'Philippines', team: 'fnop' },
   { slug: 'kingkong', nickname: 'KingKong', role: 'jungle', country: 'Philippines', team: 'fnop' },
   { slug: 'kirk', nickname: 'Kirk', role: 'exp', country: 'Philippines', team: 'fnop' },
   { slug: 'fnop-coach', nickname: 'Duckey', role: 'coach', country: 'Philippines', team: 'fnop' },
-  // Falcons
-  { slug: 'kyle', nickname: 'KyleTzy', role: 'gold', country: 'Philippines', team: 'falcons' },
-  { slug: 'yve', nickname: 'Yve', role: 'mid', country: 'Philippines', team: 'falcons' },
-  { slug: 'ryy', nickname: 'Ryy', role: 'jungle', country: 'Philippines', team: 'falcons' },
-  { slug: 'coco', nickname: 'Coco', role: 'exp', country: 'Philippines', team: 'falcons' },
-  { slug: 'falcons-coach', nickname: 'Ark', role: 'coach', country: 'Philippines', team: 'falcons' },
+  // AP.Bren (ex-Falcons AP.Bren roster)
+  { slug: 'kyle', nickname: 'KyleTzy', role: 'gold', country: 'Philippines', team: 'apbren' },
+  { slug: 'yve', nickname: 'Yve', role: 'mid', country: 'Philippines', team: 'apbren' },
+  { slug: 'ryy', nickname: 'Ryy', role: 'jungle', country: 'Philippines', team: 'apbren' },
+  { slug: 'coco', nickname: 'Coco', role: 'exp', country: 'Philippines', team: 'apbren' },
+  { slug: 'apbren-coach', nickname: 'Ark', role: 'coach', country: 'Philippines', team: 'apbren' },
+  // Falcons (PH)
+  { slug: 'panday', nickname: 'Panday', role: 'gold', country: 'Philippines', team: 'falcons' },
+  { slug: 'migz', nickname: 'Migz', role: 'mid', country: 'Philippines', team: 'falcons' },
+  { slug: 'tams', nickname: 'Tams', role: 'jungle', country: 'Philippines', team: 'falcons' },
+  { slug: 'caloy', nickname: 'Caloy', role: 'exp', country: 'Philippines', team: 'falcons' },
+  { slug: 'falcons-coach', nickname: 'Mac', role: 'coach', country: 'Philippines', team: 'falcons' },
+  // Aurora Gaming (PH)
+  { slug: 'vinz', nickname: 'Vinz', role: 'gold', country: 'Philippines', team: 'aurora' },
+  { slug: 'marky', nickname: 'Marky', role: 'mid', country: 'Philippines', team: 'aurora' },
+  { slug: 'jhay', nickname: 'Jhay', role: 'jungle', country: 'Philippines', team: 'aurora' },
+  { slug: 'piolo', nickname: 'Piolo', role: 'exp', country: 'Philippines', team: 'aurora' },
+  { slug: 'aurora-coach', nickname: 'Wrecker', role: 'coach', country: 'Philippines', team: 'aurora' },
   // SRG
   { slug: 'innocent', nickname: 'Innocent', role: 'gold', country: 'Malaysia', team: 'srg' },
   { slug: 'yums', nickname: 'Yums', role: 'mid', country: 'Malaysia', team: 'srg' },
@@ -189,6 +243,20 @@ interface CreatedMatch {
   tournamentId: string;
 }
 
+async function createBroadcasts(
+  match: CreatedMatch,
+  feeds: Array<{ language: 'en' | 'id' | 'ms' | 'tl'; viewer_count: number }>,
+): Promise<void> {
+  await prisma.matchBroadcast.createMany({
+    data: feeds.map((feed) => ({
+      match_id: match.id,
+      language: feed.language,
+      stream_url: `https://cdn.example.com/streams/${feed.language}-${match.id.slice(0, 8)}.m3u8`,
+      viewer_count: feed.viewer_count,
+    })),
+  });
+}
+
 async function createMatch(input: {
   tournamentId: string;
   teamAId: string;
@@ -200,6 +268,7 @@ async function createMatch(input: {
   featured?: boolean;
   viewerCount?: number;
   streamUrl?: string | null;
+  thumbnailUrl?: string;
 }): Promise<CreatedMatch> {
   const rand = mulberry32(
     input.scheduledAt.getTime() ^ input.teamAId.length ^ input.teamBId.length,
@@ -228,7 +297,9 @@ async function createMatch(input: {
       viewer_count: input.viewerCount ?? 0,
       featured: input.featured ?? false,
       stream_url: input.streamUrl ?? null,
-      thumbnail_url: `${SEED_VIDEO_PREFIX}thumbs/match-${input.teamAId}.jpg`,
+      thumbnail_url:
+        input.thumbnailUrl ??
+        seedImage(`match-${input.teamAId}`, 640, 360),
     },
   });
 
@@ -444,7 +515,9 @@ async function main(): Promise<void> {
   });
 
   await prisma.video.deleteMany({
-    where: { url: { startsWith: SEED_VIDEO_PREFIX } },
+    where: {
+      OR: [{ url: SEED_STREAM_URL }, { url: { startsWith: 'https://cdn.example.com/' } }],
+    },
   });
   const danglingEntityIds = [...oldTeamIds, ...oldPlayerIds];
   if (danglingEntityIds.length > 0) {
@@ -481,7 +554,7 @@ async function main(): Promise<void> {
         prize_pool: tournament.prize,
         description: tournament.description,
         featured: tournament.featured,
-        logo_url: `${SEED_VIDEO_PREFIX}logos/${tournament.slug}.png`,
+        logo_url: seedImage(`logo-${tournament.slug}`, 128, 128),
       },
     });
     tournamentById.set(tournament.slug, row.id);
@@ -498,7 +571,7 @@ async function main(): Promise<void> {
         color_secondary: team.color_secondary,
         founded_year: team.founded_year,
         description: team.description,
-        logo_url: `${SEED_VIDEO_PREFIX}logos/${team.slug}.png`,
+        logo_url: team.logo ?? seedImage(`logo-${team.slug}`, 128, 128),
       },
     });
     teamBySlug.set(team.slug, { id: row.id });
@@ -515,7 +588,7 @@ async function main(): Promise<void> {
         role: player.role,
         country: player.country,
         team_id: team.id,
-        photo_url: `${SEED_VIDEO_PREFIX}players/${player.slug}.png`,
+        photo_url: seedImage(`player-${player.slug}`, 256, 256),
       },
     });
     const list = playersByTeam.get(team.id) ?? [];
@@ -539,8 +612,8 @@ async function main(): Promise<void> {
   const base = new Date('2026-09-01T10:00:00Z').getTime();
   const createdMatches: CreatedMatch[] = [];
 
-  // MPL ID: 5 teams double round robin (20 completed) + playoffs + live + upcoming
-  const idLeague = ['onic', 'rrq', 'evos', 'btr', 'tlid'];
+  // MPL ID: 9 teams double round robin (72 completed) + playoffs + live + upcoming
+  const idLeague = ['onic', 'rrq', 'evos', 'btr', 'tlid', 'ae', 'dewa', 'geek', 'navi'];
   let offset = 0;
   for (const teamA of idLeague) {
     for (const teamB of idLeague) {
@@ -594,31 +667,34 @@ async function main(): Promise<void> {
     }),
   );
   // live matches (featured + one more) — started ~2h ago so e2e fixtures always rank newer
-  createdMatches.push(
-    await createMatch({
-      tournamentId: tournamentId('mpl-id-s16'),
-      teamAId: teamId('onic'),
-      teamBId: teamId('rrq'),
-      status: 'live',
-      stage: 'regular_season',
-      scheduledAt: new Date(Date.now() - 2 * 3_600_000),
-      endedAt: null,
-      featured: true,
-      viewerCount: 18400,
-      streamUrl: `${SEED_VIDEO_PREFIX}streams/mpl-id-s16-onic-rrq.m3u8`,
-    }),
-    await createMatch({
-      tournamentId: tournamentId('mpl-id-s16'),
-      teamAId: teamId('evos'),
-      teamBId: teamId('btr'),
-      status: 'live',
-      stage: 'regular_season',
-      scheduledAt: new Date(Date.now() - 3 * 3_600_000),
-      endedAt: null,
-      viewerCount: 9200,
-      streamUrl: `${SEED_VIDEO_PREFIX}streams/mpl-id-s16-evos-btr.m3u8`,
-    }),
-  );
+  const featuredLive = await createMatch({
+    tournamentId: tournamentId('mpl-id-s16'),
+    teamAId: teamId('onic'),
+    teamBId: teamId('rrq'),
+    status: 'live',
+    stage: 'regular_season',
+    scheduledAt: new Date(Date.now() - 2 * 3_600_000),
+    endedAt: null,
+    featured: true,
+    viewerCount: 18400,
+    streamUrl: SEED_STREAM_URL,
+    thumbnailUrl: SEED_LIVE_THUMB_ID,
+  });
+  createdMatches.push(featuredLive);
+  const secondaryLive = await createMatch({
+    tournamentId: tournamentId('mpl-id-s16'),
+    teamAId: teamId('evos'),
+    teamBId: teamId('btr'),
+    status: 'live',
+    stage: 'regular_season',
+    scheduledAt: new Date(Date.now() - 3 * 3_600_000),
+    endedAt: null,
+    viewerCount: 9200,
+    streamUrl: SEED_STREAM_URL,
+    thumbnailUrl: SEED_LIVE_THUMB_ID,
+  });
+  createdMatches.push(secondaryLive);
+  void secondaryLive;
   // upcoming
   for (let i = 1; i <= 4; i++) {
     createdMatches.push(
@@ -634,8 +710,8 @@ async function main(): Promise<void> {
     );
   }
 
-  // MPL PH: 3 teams round robin (6 completed) + live + upcoming
-  const phLeague = ['fnop', 'falcons', 'srg'];
+  // MPL PH: 4 teams round robin (6 completed) + live + upcoming
+  const phLeague = ['fnop', 'apbren', 'aurora', 'falcons'];
   for (const teamA of phLeague) {
     for (const teamB of phLeague) {
       if (teamA >= teamB) continue;
@@ -653,19 +729,19 @@ async function main(): Promise<void> {
       offset += 1;
     }
   }
-  createdMatches.push(
-    await createMatch({
-      tournamentId: tournamentId('mpl-ph-s16'),
-      teamAId: teamId('fnop'),
-      teamBId: teamId('falcons'),
-      status: 'live',
-      stage: 'regular_season',
-      scheduledAt: new Date(Date.now() - 4 * 3_600_000),
-      endedAt: null,
-      viewerCount: 6100,
-      streamUrl: `${SEED_VIDEO_PREFIX}streams/mpl-ph-s16-fnop-falcons.m3u8`,
-    }),
-  );
+  const phLive = await createMatch({
+    tournamentId: tournamentId('mpl-ph-s16'),
+    teamAId: teamId('fnop'),
+    teamBId: teamId('falcons'),
+    status: 'live',
+    stage: 'regular_season',
+    scheduledAt: new Date(Date.now() - 4 * 3_600_000),
+    endedAt: null,
+    viewerCount: 6100,
+    streamUrl: SEED_STREAM_URL,
+    thumbnailUrl: SEED_LIVE_THUMB_PH,
+  });
+  createdMatches.push(phLive);
   for (let i = 1; i <= 2; i++) {
     createdMatches.push(
       await createMatch({
@@ -681,9 +757,9 @@ async function main(): Promise<void> {
   }
 
   // MSC 2026: completed playoffs bracket (8 matches)
-  const mscTeams = ['onic', 'rrq', 'evos', 'fnop', 'falcons', 'srg', 'btr', 'tlid'];
+  const mscTeams = ['onic', 'rrq', 'evos', 'fnop', 'apbren', 'srg', 'btr', 'tlid'];
   const bracket = [
-    ['onic', 'tlid'], ['rrq', 'srg'], ['evos', 'fnop'], ['btr', 'falcons'],
+    ['onic', 'tlid'], ['rrq', 'srg'], ['evos', 'fnop'], ['btr', 'apbren'],
     ['onic', 'evos'], ['rrq', 'btr'], ['rrq', 'evos'], ['onic', 'rrq'],
   ];
   for (const [index, [a, b]] of bracket.entries()) {
@@ -710,6 +786,20 @@ async function main(): Promise<void> {
   for (const match of createdMatches.filter((m) => m.status === 'live')) {
     await createLiveData(match);
   }
+
+  // ---- language broadcast variants (MPL ID: id+en, MPL PH: tl+en) ----
+  await createBroadcasts(featuredLive, [
+    { language: 'id', viewer_count: 12100 },
+    { language: 'en', viewer_count: 6300 },
+  ]);
+  await createBroadcasts(secondaryLive, [
+    { language: 'id', viewer_count: 6100 },
+    { language: 'en', viewer_count: 3100 },
+  ]);
+  await createBroadcasts(phLive, [
+    { language: 'tl', viewer_count: 4000 },
+    { language: 'en', viewer_count: 2100 },
+  ]);
 
   // ---- videos ----
   const completed = createdMatches.filter((m) => m.status === 'completed');
@@ -746,8 +836,8 @@ async function main(): Promise<void> {
       data: {
         title: video.title,
         type: video.type,
-        url: `${SEED_VIDEO_PREFIX}videos/${videoIndex}.m3u8`,
-        thumbnail_url: `${SEED_VIDEO_PREFIX}thumbs/video-${videoIndex}.jpg`,
+        url: SEED_STREAM_URL,
+        thumbnail_url: seedImage(`video-${videoIndex}`),
         duration_seconds: video.duration,
         match_id:
           video.matchIndex !== null

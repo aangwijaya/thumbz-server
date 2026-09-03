@@ -7,7 +7,6 @@ import { MatchIdParamsDto } from './dto/match-id-params.dto';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
 import { MatchDetail, MatchSummary, MatchesService } from './matches.service';
-
 @Controller('matches')
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
@@ -109,6 +108,14 @@ export class MatchesController {
     data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
   }> {
     return this.matchesService.economy(params.id, query);
+  }
+
+  @Public()
+  @Get(':id/broadcasts')
+  broadcasts(@Param() params: MatchIdParamsDto): Promise<{
+    data: Array<{ language: string; stream_url: string; viewer_count: number }>;
+  }> {
+    return this.matchesService.broadcasts(params.id);
   }
 
   @Public()

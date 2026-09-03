@@ -190,6 +190,7 @@ model Match {
   PlayerMatchSnapshot PlayerMatchSnapshot[]
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
+  broadcasts          MatchBroadcast[]
 
   @@index([status, scheduled_at])
   @@index([tournament_id])
@@ -363,4 +364,24 @@ model MatchEvent {
 
   @@index([match_id, occurred_at])
   @@map("match_events")
+}
+
+enum broadcast_language {
+  en
+  id
+  ms
+  tl
+}
+
+model MatchBroadcast {
+  id           String              @id @default(uuid()) @db.Uuid
+  match_id     String              @db.Uuid
+  language     broadcast_language
+  stream_url   String
+  viewer_count Int                 @default(0)
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@unique([match_id, language])
+  @@map("match_broadcasts")
 }
