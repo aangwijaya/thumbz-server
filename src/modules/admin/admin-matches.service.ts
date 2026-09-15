@@ -15,6 +15,7 @@ import { UpdateMatchDto } from './dto/update-match.dto';
 import { PlayerSnapshotDto } from './dto/upsert-live-stats.dto';
 import { ItemPurchaseDto } from './dto/upsert-equipment.dto';
 import { MatchEventDto } from './dto/upsert-events.dto';
+import { BroadcastDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 import { validateCompletedMatch, validateTransition } from './match-state';
 
@@ -610,6 +611,52 @@ export class AdminMatchesService {
         details: true,
         occurred_at: true,
       },
+    });
+
+    return { data: rows.map((row) => ({ ...row })) };
+  }
+
+  async upsertBroadcasts(
+    id: string,
+    broadcasts: BroadcastDto[],
+  ): Promise<{
+    data: Array<{ language: string; stream_url: string; viewer_count: number }>;
+  }> {
+    const match = await this.prisma.match.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (match === null) {
+      throw new NotFoundException();
+    }
+
+    const languages = broadcasts.map((b) => b.language);
+    if (new Set(languages).size !== languages.length) {
+      throw new BusinessRuleException(
+        'each broadcast language may appear only once',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.matchBroadcast.deleteMany({ where: { match_id: id } }),
+      ...(broadcasts.length > 0
+        ? [
+            this.prisma.matchBroadcast.createMany({
+              data: broadcasts.map((b) => ({
+                match_id: id,
+                language: b.language,
+                stream_url: b.stream_url,
+                viewer_count: b.viewer_count ?? 0,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    const rows = await this.prisma.matchBroadcast.findMany({
+      where: { match_id: id },
+      orderBy: { viewer_count: 'desc' },
+      select: { language: true, stream_url: true, viewer_count: true },
     });
 
     return { data: rows.map((row) => ({ ...row })) };

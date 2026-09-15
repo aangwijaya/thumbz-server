@@ -49,6 +49,9 @@ npm install
 | `SUPABASE_JWKS_URL` | yes | `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` |
 | `CORS_ORIGINS` | yes | Comma-separated browser origins (e.g. `http://localhost:3000`) |
 | `PORT` | no | API port (default `3001`) |
+| `NOWPAYMENTS_API_KEY` / `NOWPAYMENTS_IPN_SECRET` | no | Enable venue-ticket crypto checkout (NOWPayments). Empty = checkout returns `503` |
+| `NOWPAYMENTS_API_BASE` | no | Sandbox by default (`https://api-sandbox.nowpayments.io`) |
+| `PUBLIC_API_URL` | no | Public base URL of this API, used for the provider IPN callback |
 
 Secrets never go to the client; the API only ever receives short-lived access
 tokens which it verifies against the JWKS endpoint.
@@ -68,9 +71,13 @@ Migrations encode application-layer enforcement:
   enforces auth/authz itself via guards.
 - Referential checks (`CHECK`), enums, and FKs live in the schema.
 
-Seed output (browsable demo data): 3 tournaments, 8 teams, 40 players,
-43 matches (incl. 3 live with full economy/live-stats/equipment/events),
-20 videos. `npx prisma db seed` cleans and recreates; it never touches
+Seed output (browsable demo data): 3 tournaments, 14 teams, 70 players,
+~98 matches (incl. 3 live with full economy/live-stats/equipment/events,
+language broadcast variants, live comments, venue ticket configs and league
+key-art thumbnails), 20 videos.
+MPL ID runs a 9-team double round robin; MPL PH runs a 4-team round robin
+(ONIC Philippines, AP.Bren, Aurora Gaming, Falcons) with real team branding
+(logos served via the wsrv/imagekit image proxy). `npx prisma db seed` cleans and recreates; it never touches
 user-scoped data (favorites/history) beyond cleanup of its own fixture slugs.
 Optional env `SEED_ADMIN_ID` (with `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
 to fetch the matching user) creates the `admin` profile; a default

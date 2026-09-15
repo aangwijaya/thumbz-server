@@ -21,6 +21,7 @@ import { UpsertEconomyDto } from './dto/upsert-economy.dto';
 import { UpsertEquipmentDto } from './dto/upsert-equipment.dto';
 import { UpsertEventsDto } from './dto/upsert-events.dto';
 import { UpsertLiveStatsDto } from './dto/upsert-live-stats.dto';
+import { UpsertBroadcastsDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 
 @Controller('admin/matches')
@@ -83,6 +84,17 @@ export class AdminController {
     data: Array<Record<string, unknown>>;
   }> {
     return this.adminMatches.upsertLiveStats(params.id, body.snapshots);
+  }
+
+  @Roles('admin')
+  @Put(':id/broadcasts')
+  upsertBroadcasts(
+    @Param() params: AdminIdParamsDto,
+    @Body() body: UpsertBroadcastsDto,
+  ): Promise<{
+    data: Array<{ language: string; stream_url: string; viewer_count: number }>;
+  }> {
+    return this.adminMatches.upsertBroadcasts(params.id, body.broadcasts);
   }
 
   @Roles('admin')

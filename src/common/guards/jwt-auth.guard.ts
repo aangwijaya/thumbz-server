@@ -15,7 +15,22 @@ export const SUPABASE_AUDIENCE = 'authenticated';
 
 interface JwtRequest {
   headers?: Record<string, string | string[] | undefined>;
-  user?: { sub: string };
+  user?: { sub: string; name?: string };
+}
+
+function displayName(payload: Record<string, unknown>): string | undefined {
+  const metadata = payload.user_metadata;
+  if (typeof metadata !== 'object' || metadata === null) {
+    return undefined;
+  }
+  const record = metadata as Record<string, unknown>;
+  for (const key of ['full_name', 'name', 'display_name', 'username']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim().slice(0, 80);
+    }
+  }
+  return undefined;
 }
 
 @Injectable()
@@ -58,7 +73,10 @@ export class JwtAuthGuard implements CanActivate {
       try {
         const { payload } = await this.verify(token);
         if (typeof payload.sub === 'string') {
-          request.user = { sub: payload.sub };
+          request.user = {
+            sub: payload.sub,
+            name: displayName(payload),
+          };
         }
       } catch (error) {
         this.logger.warn(
@@ -77,7 +95,10 @@ export class JwtAuthGuard implements CanActivate {
       if (typeof payload.sub !== 'string') {
         throw new UnauthorizedException();
       }
-      request.user = { sub: payload.sub };
+      request.user = {
+        sub: payload.sub,
+        name: displayName(payload),
+      };
     } catch (error) {
       this.logger.warn(
         `JWT verification failed: ${error instanceof Error ? error.message : String(error)}`,

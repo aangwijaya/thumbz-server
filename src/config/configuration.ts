@@ -3,6 +3,10 @@ export interface AppConfig {
   databaseUrl: string;
   supabaseJwksUrl: string;
   corsOrigins: string[];
+  nowpaymentsApiKey: string | null;
+  nowpaymentsIpnSecret: string | null;
+  nowpaymentsApiBase: string;
+  publicApiUrl: string;
 }
 
 export const DEFAULT_PORT = 3001;
@@ -72,5 +76,10 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
       .split(',')
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
+    nowpaymentsApiKey: env.NOWPAYMENTS_API_KEY?.trim() || null,
+    nowpaymentsIpnSecret: env.NOWPAYMENTS_IPN_SECRET?.trim() || null,
+    nowpaymentsApiBase:
+      env.NOWPAYMENTS_API_BASE?.trim() || 'https://api-sandbox.nowpayments.io',
+    publicApiUrl: env.PUBLIC_API_URL?.trim() || 'http://localhost:3001',
   };
 }

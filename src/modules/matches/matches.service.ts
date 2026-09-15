@@ -29,6 +29,10 @@ export const SUMMARY_INCLUDE = {
       color_primary: true,
     },
   },
+  broadcasts: {
+    orderBy: { viewer_count: 'desc' },
+    select: { language: true, stream_url: true, viewer_count: true },
+  },
 } satisfies Prisma.MatchInclude;
 
 export const DETAIL_INCLUDE = {
@@ -59,10 +63,20 @@ export const DETAIL_INCLUDE = {
       is_active: true,
     },
   },
+  broadcasts: {
+    orderBy: { viewer_count: 'desc' },
+    select: { language: true, stream_url: true, viewer_count: true },
+  },
 } satisfies Prisma.MatchInclude;
 
 type SummaryRow = Prisma.MatchGetPayload<{ include: typeof SUMMARY_INCLUDE }>;
 type DetailRow = Prisma.MatchGetPayload<{ include: typeof DETAIL_INCLUDE }>;
+
+export interface BroadcastSummary {
+  language: string;
+  stream_url: string;
+  viewer_count: number;
+}
 
 export interface MatchSummary {
   id: string;
@@ -97,6 +111,7 @@ export interface MatchSummary {
   thumbnail_url: string | null;
   viewer_count: number;
   featured: boolean;
+  broadcasts: BroadcastSummary[];
 }
 
 export interface MatchDetail extends MatchSummary {
@@ -154,6 +169,14 @@ export function toMatchSummary(row: SummaryRow): MatchSummary {
     thumbnail_url: row.thumbnail_url,
     viewer_count: row.viewer_count,
     featured: row.featured,
+    broadcasts:
+      row.status === 'live'
+        ? row.broadcasts.map((b) => ({
+            language: b.language,
+            stream_url: b.stream_url,
+            viewer_count: b.viewer_count,
+          }))
+        : [],
   };
 }
 
@@ -659,5 +682,29 @@ export class MatchesService {
     });
 
     return { data: rows.map((row) => ({ ...row })) };
+  }
+
+  async broadcasts(id: string): Promise<{ data: BroadcastSummary[] }> {
+    const match = await this.prisma.match.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (match === null) {
+      throw new NotFoundException();
+    }
+
+    const rows = await this.prisma.matchBroadcast.findMany({
+      where: { match_id: id },
+      orderBy: { viewer_count: 'desc' },
+      select: { language: true, stream_url: true, viewer_count: true },
+    });
+
+    return {
+      data: rows.map((row) => ({
+        language: row.language,
+        stream_url: row.stream_url,
+        viewer_count: row.viewer_count,
+      })),
+    };
   }
 }

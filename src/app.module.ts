@@ -9,6 +9,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { configuration, validateEnv } from './config/configuration';
 import { AdminModule } from './modules/admin/admin.module';
+import { CommentsModule } from './modules/comments/comments.module';
+import { TicketsModule } from './modules/tickets/tickets.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { HealthModule } from './modules/health/health.module';
 import { HistoryModule } from './modules/history/history.module';
@@ -42,6 +44,8 @@ import { PrismaModule } from './prisma/prisma.module';
     SearchModule,
     HomeModule,
     AdminModule,
+    CommentsModule,
+    TicketsModule,
     ThrottlerModule.forRoot([
       {
         name: 'default',

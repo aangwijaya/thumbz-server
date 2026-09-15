@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Response } from 'express';
@@ -110,6 +111,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
         status: HttpStatus.CONFLICT,
         body: {
           error: { code: 'CONFLICT', message: 'Conflict', details: null },
+        },
+      };
+    }
+
+    if (exception instanceof ServiceUnavailableException) {
+      return {
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        body: {
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Service unavailable',
+            details: null,
+          },
         },
       };
     }

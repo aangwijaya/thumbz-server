@@ -86,6 +86,10 @@ describe('configuration', () => {
       databaseUrl: validEnv.DATABASE_URL,
       supabaseJwksUrl: validEnv.SUPABASE_JWKS_URL,
       corsOrigins: ['http://localhost:3000'],
+      nowpaymentsApiKey: null,
+      nowpaymentsIpnSecret: null,
+      nowpaymentsApiBase: 'https://api-sandbox.nowpayments.io',
+      publicApiUrl: 'http://localhost:3001',
     });
   });
 });

@@ -76,6 +76,9 @@ model Profile {
 
   favorites    Favorite[]
   watchHistory WatchHistory[]
+  comments     MatchComment[]
+  ticketOrders TicketOrder[]
+  tickets      Ticket[]
 
   @@map("profiles")
 }
@@ -190,6 +193,11 @@ model Match {
   PlayerMatchSnapshot PlayerMatchSnapshot[]
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
+  broadcasts          MatchBroadcast[]
+  comments            MatchComment[]
+  ticketConfig        MatchTicketConfig?
+  ticketOrders        TicketOrder[]
+  tickets             Ticket[]
 
   @@index([status, scheduled_at])
   @@index([tournament_id])
@@ -363,4 +371,112 @@ model MatchEvent {
 
   @@index([match_id, occurred_at])
   @@map("match_events")
+}
+
+enum broadcast_language {
+  en
+  id
+  ms
+  tl
+}
+
+model MatchBroadcast {
+  id           String              @id @default(uuid()) @db.Uuid
+  match_id     String              @db.Uuid
+  language     broadcast_language
+  stream_url   String
+  viewer_count Int                 @default(0)
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@unique([match_id, language])
+  @@map("match_broadcasts")
+}
+
+model MatchComment {
+  id          String   @id @default(uuid()) @db.Uuid
+  match_id    String   @db.Uuid
+  user_id     String   @db.Uuid
+  author_name String
+  body        String
+  created_at  DateTime @default(now())
+
+  match   Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([match_id, created_at(sort: Desc)])
+  @@map("match_comments")
+}
+
+enum ticket_order_status {
+  pending
+  paid
+  cancelled
+  expired
+  failed
+}
+
+enum ticket_status {
+  valid
+  used
+  void
+}
+
+model MatchTicketConfig {
+  match_id       String    @id @db.Uuid
+  venue_name     String
+  venue_city     String?
+  price_usd      Decimal   @db.Decimal(10, 2)
+  quota_total    Int
+  sales_open_at  DateTime?
+  sales_close_at DateTime?
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@map("match_ticket_configs")
+}
+
+model TicketOrder {
+  id                  String              @id @default(uuid()) @db.Uuid
+  match_id            String              @db.Uuid
+  user_id             String              @db.Uuid
+  quantity            Int
+  unit_price_usd      Decimal             @db.Decimal(10, 2)
+  total_usd           Decimal             @db.Decimal(10, 2)
+  status              ticket_order_status @default(pending)
+  provider            String              @default("nowpayments")
+  provider_payment_id String?             @unique
+  invoice_url         String?
+  expires_at          DateTime
+  created_at          DateTime            @default(now())
+  paid_at             DateTime?
+
+  match   Match    @relation(fields: [match_id], references: [id], onDelete: Restrict)
+  profile Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@index([match_id, status])
+  @@index([user_id, created_at(sort: Desc)])
+  @@map("ticket_orders")
+}
+
+model Ticket {
+  id        String        @id @default(uuid()) @db.Uuid
+  order_id  String        @db.Uuid
+  match_id  String        @db.Uuid
+  user_id   String        @db.Uuid
+  code      String        @unique
+  status    ticket_status @default(valid)
+  issued_at DateTime      @default(now())
+
+  order   TicketOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  match   Match       @relation(fields: [match_id], references: [id], onDelete: Restrict)
+  profile Profile     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, issued_at(sort: Desc)])
+  @@index([match_id])
+  @@map("tickets")
 }
