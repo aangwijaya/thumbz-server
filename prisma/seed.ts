@@ -38,8 +38,8 @@ const TOURNAMENTS: Array<{
   description: string | null;
 }> = [
   {
-    slug: 'mpl-id-s16',
-    name: 'MPL Indonesia Season 16',
+    slug: 'mpl-id-s18',
+    name: 'MPL Indonesia Season 18',
     status: 'ongoing',
     region: 'Indonesia',
     start: '2026-08-01',
@@ -50,8 +50,8 @@ const TOURNAMENTS: Array<{
       'The premier Mobile Legends professional league of Indonesia.',
   },
   {
-    slug: 'mpl-ph-s16',
-    name: 'MPL Philippines Season 16',
+    slug: 'mpl-ph-s18',
+    name: 'MPL Philippines Season 18',
     status: 'ongoing',
     region: 'Philippines',
     start: '2026-08-08',
@@ -93,7 +93,7 @@ const TEAMS: Array<{
   { slug: 'dewa', name: 'Dewa United Esports', region: 'Indonesia', color_primary: '#16A34A', color_secondary: null, founded_year: 2020, description: 'Dewa United Esports from Jakarta.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/dewa-united-500.png' },
   { slug: 'geek', name: 'Geek Fam ID', region: 'Indonesia', color_primary: '#F59E0B', color_secondary: null, founded_year: 2019, description: 'Geek Fam Indonesian roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/geek-500.png' },
   { slug: 'navi', name: 'NAVI', region: 'Indonesia', color_primary: '#FDD835', color_secondary: '#0A0A0A', founded_year: 2021, description: 'NAVI Indonesian division.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/NAVI-2.png' },
-  { slug: 'fnop', name: 'Fnatic ONIC PH', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'The Philippine super team.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/onicph-bw-400.webp' },
+  { slug: 'onicph', name: 'ONIC Philippines', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'ONIC Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/onicph-bw-400.webp' },
   { slug: 'apbren', name: 'AP.Bren', region: 'Philippines', color_primary: '#B8860B', color_secondary: null, founded_year: 2023, description: 'Former Falcons AP.Bren, now competing as AP.Bren.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/apbren-400.webp' },
   { slug: 'aurora', name: 'Aurora Gaming', region: 'Philippines', color_primary: '#22D3EE', color_secondary: null, founded_year: 2022, description: 'Rising Philippine organisation.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/aurora-gaming-400.webp' },
   { slug: 'falcons', name: 'Falcons', region: 'Philippines', color_primary: '#CA8A04', color_secondary: null, founded_year: 2025, description: 'Falcons Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/falcon-400.webp' },
@@ -164,11 +164,11 @@ const PLAYERS: Array<{
   { slug: 'rivaldo', nickname: 'Rivaldo', role: 'exp', country: 'Indonesia', team: 'navi' },
   { slug: 'navi-coach', nickname: 'Dion', role: 'coach', country: 'Indonesia', team: 'navi' },
   // FNOP
-  { slug: 'kelra', nickname: 'Kelra', role: 'gold', country: 'Philippines', team: 'fnop' },
-  { slug: 'superfrince', nickname: 'Super Frince', role: 'mid', country: 'Philippines', team: 'fnop' },
-  { slug: 'kingkong', nickname: 'KingKong', role: 'jungle', country: 'Philippines', team: 'fnop' },
-  { slug: 'kirk', nickname: 'Kirk', role: 'exp', country: 'Philippines', team: 'fnop' },
-  { slug: 'fnop-coach', nickname: 'Duckey', role: 'coach', country: 'Philippines', team: 'fnop' },
+  { slug: 'kelra', nickname: 'Kelra', role: 'gold', country: 'Philippines', team: 'onicph' },
+  { slug: 'superfrince', nickname: 'Super Frince', role: 'mid', country: 'Philippines', team: 'onicph' },
+  { slug: 'kingkong', nickname: 'KingKong', role: 'jungle', country: 'Philippines', team: 'onicph' },
+  { slug: 'kirk', nickname: 'Kirk', role: 'exp', country: 'Philippines', team: 'onicph' },
+  { slug: 'onicph-coach', nickname: 'Duckey', role: 'coach', country: 'Philippines', team: 'onicph' },
   // AP.Bren (ex-Falcons AP.Bren roster)
   { slug: 'kyle', nickname: 'KyleTzy', role: 'gold', country: 'Philippines', team: 'apbren' },
   { slug: 'yve', nickname: 'Yve', role: 'mid', country: 'Philippines', team: 'apbren' },
@@ -623,7 +623,7 @@ async function main(): Promise<void> {
         const endedAt = new Date(scheduledAt.getTime() + 2 * 3_600_000);
         createdMatches.push(
           await createMatch({
-            tournamentId: tournamentId('mpl-id-s16'),
+            tournamentId: tournamentId('mpl-id-s18'),
             teamAId: teamId(leg === 0 ? teamA : teamB),
             teamBId: teamId(leg === 0 ? teamB : teamA),
             status: 'completed',
@@ -639,7 +639,7 @@ async function main(): Promise<void> {
   // playoffs + grand final (completed, recent)
   createdMatches.push(
     await createMatch({
-      tournamentId: tournamentId('mpl-id-s16'),
+      tournamentId: tournamentId('mpl-id-s18'),
       teamAId: teamId('onic'),
       teamBId: teamId('evos'),
       status: 'completed',
@@ -648,7 +648,7 @@ async function main(): Promise<void> {
       endedAt: new Date(base - 3 * DAY + 2 * 3_600_000),
     }),
     await createMatch({
-      tournamentId: tournamentId('mpl-id-s16'),
+      tournamentId: tournamentId('mpl-id-s18'),
       teamAId: teamId('rrq'),
       teamBId: teamId('tlid'),
       status: 'completed',
@@ -657,7 +657,7 @@ async function main(): Promise<void> {
       endedAt: new Date(base - 2 * DAY + 2 * 3_600_000),
     }),
     await createMatch({
-      tournamentId: tournamentId('mpl-id-s16'),
+      tournamentId: tournamentId('mpl-id-s18'),
       teamAId: teamId('onic'),
       teamBId: teamId('rrq'),
       status: 'completed',
@@ -668,8 +668,8 @@ async function main(): Promise<void> {
   );
   // live matches (featured + one more) — started ~2h ago so e2e fixtures always rank newer
   const featuredLive = await createMatch({
-    tournamentId: tournamentId('mpl-id-s16'),
-    teamAId: teamId('onic'),
+    tournamentId: tournamentId('mpl-id-s18'),
+    teamAId: teamId('ae'),
     teamBId: teamId('rrq'),
     status: 'live',
     stage: 'regular_season',
@@ -682,7 +682,7 @@ async function main(): Promise<void> {
   });
   createdMatches.push(featuredLive);
   const secondaryLive = await createMatch({
-    tournamentId: tournamentId('mpl-id-s16'),
+    tournamentId: tournamentId('mpl-id-s18'),
     teamAId: teamId('evos'),
     teamBId: teamId('btr'),
     status: 'live',
@@ -694,12 +694,11 @@ async function main(): Promise<void> {
     thumbnailUrl: SEED_LIVE_THUMB_ID,
   });
   createdMatches.push(secondaryLive);
-  void secondaryLive;
   // upcoming
   for (let i = 1; i <= 4; i++) {
     createdMatches.push(
       await createMatch({
-        tournamentId: tournamentId('mpl-id-s16'),
+        tournamentId: tournamentId('mpl-id-s18'),
         teamAId: teamId(idLeague[i % idLeague.length] ?? 'onic'),
         teamBId: teamId(idLeague[(i + 2) % idLeague.length] ?? 'rrq'),
         status: 'scheduled',
@@ -711,13 +710,13 @@ async function main(): Promise<void> {
   }
 
   // MPL PH: 4 teams round robin (6 completed) + live + upcoming
-  const phLeague = ['fnop', 'apbren', 'aurora', 'falcons'];
+  const phLeague = ['onicph', 'apbren', 'aurora', 'falcons'];
   for (const teamA of phLeague) {
     for (const teamB of phLeague) {
       if (teamA >= teamB) continue;
       createdMatches.push(
         await createMatch({
-          tournamentId: tournamentId('mpl-ph-s16'),
+          tournamentId: tournamentId('mpl-ph-s18'),
           teamAId: teamId(teamA),
           teamBId: teamId(teamB),
           status: 'completed',
@@ -730,8 +729,8 @@ async function main(): Promise<void> {
     }
   }
   const phLive = await createMatch({
-    tournamentId: tournamentId('mpl-ph-s16'),
-    teamAId: teamId('fnop'),
+    tournamentId: tournamentId('mpl-ph-s18'),
+    teamAId: teamId('onicph'),
     teamBId: teamId('falcons'),
     status: 'live',
     stage: 'regular_season',
@@ -745,8 +744,8 @@ async function main(): Promise<void> {
   for (let i = 1; i <= 2; i++) {
     createdMatches.push(
       await createMatch({
-        tournamentId: tournamentId('mpl-ph-s16'),
-        teamAId: teamId(phLeague[i % phLeague.length] ?? 'fnop'),
+        tournamentId: tournamentId('mpl-ph-s18'),
+        teamAId: teamId(phLeague[i % phLeague.length] ?? 'onicph'),
         teamBId: teamId(phLeague[(i + 1) % phLeague.length] ?? 'srg'),
         status: 'scheduled',
         stage: 'regular_season',
@@ -757,9 +756,9 @@ async function main(): Promise<void> {
   }
 
   // MSC 2026: completed playoffs bracket (8 matches)
-  const mscTeams = ['onic', 'rrq', 'evos', 'fnop', 'apbren', 'srg', 'btr', 'tlid'];
+  const mscTeams = ['onic', 'rrq', 'evos', 'onicph', 'apbren', 'srg', 'btr', 'tlid'];
   const bracket = [
-    ['onic', 'tlid'], ['rrq', 'srg'], ['evos', 'fnop'], ['btr', 'apbren'],
+    ['onic', 'tlid'], ['rrq', 'srg'], ['evos', 'onicph'], ['btr', 'apbren'],
     ['onic', 'evos'], ['rrq', 'btr'], ['rrq', 'evos'], ['onic', 'rrq'],
   ];
   for (const [index, [a, b]] of bracket.entries()) {
@@ -810,22 +809,22 @@ async function main(): Promise<void> {
     duration: number;
   }> = [
     { title: 'Grand Final — ONIC vs RRQ (Replay)', type: 'replay', matchIndex: completed.length - 1, duration: 7340 },
-    { title: 'Week 4 Highlights — MPL ID S16', type: 'highlight', matchIndex: null, duration: 640 },
-    { title: 'Semifinal Day 1 VOD — MPL ID S16', type: 'vod', matchIndex: completed.length - 3, duration: 11200 },
+    { title: 'Week 4 Highlights — MPL ID S18', type: 'highlight', matchIndex: null, duration: 640 },
+    { title: 'Semifinal Day 1 VOD — MPL ID S18', type: 'vod', matchIndex: completed.length - 3, duration: 11200 },
     { title: 'MSC 2026 Championship Replay', type: 'replay', matchIndex: 0, duration: 8100 },
-    { title: 'Top 5 Plays — MPL PH S16', type: 'highlight', matchIndex: null, duration: 420 },
+    { title: 'Top 5 Plays — MPL PH S18', type: 'highlight', matchIndex: null, duration: 420 },
     { title: 'Regular Season Week 3 — Day 2 VOD', type: 'vod', matchIndex: 4, duration: 9800 },
     { title: 'ONIC vs EVOS — Semifinal Replay', type: 'replay', matchIndex: completed.length - 2, duration: 7200 },
     { title: 'Kairi Jungle Montage', type: 'highlight', matchIndex: null, duration: 380 },
     { title: 'RRQ Road to Grand Final VOD', type: 'vod', matchIndex: 2, duration: 8900 },
     { title: 'MSC 2026 Playoffs — Day 1 Replay', type: 'replay', matchIndex: 1, duration: 7500 },
-    { title: 'Week 2 Highlights — MPL PH S16', type: 'highlight', matchIndex: null, duration: 540 },
+    { title: 'Week 2 Highlights — MPL PH S18', type: 'highlight', matchIndex: null, duration: 540 },
     { title: 'Bigetron vs TLID — Full VOD', type: 'vod', matchIndex: 6, duration: 9300 },
     { title: 'EVOS Comeback Story', type: 'highlight', matchIndex: null, duration: 610 },
     { title: 'Grand Finals Day VOD — MSC 2026', type: 'vod', matchIndex: 3, duration: 10100 },
     { title: 'Sanz Midlane Masterclass', type: 'highlight', matchIndex: null, duration: 460 },
     { title: 'Playoffs Replay — FNOP vs Falcons', type: 'replay', matchIndex: 5, duration: 6900 },
-    { title: 'Week 1 Highlights — MPL ID S16', type: 'highlight', matchIndex: null, duration: 590 },
+    { title: 'Week 1 Highlights — MPL ID S18', type: 'highlight', matchIndex: null, duration: 590 },
     { title: 'Selangor Red Giants VOD — Regular Season', type: 'vod', matchIndex: 7, duration: 8600 },
     { title: 'Coach Cam — Zeys Draft Review', type: 'highlight', matchIndex: null, duration: 720 },
     { title: 'MSC 2026 Finals Replay (English)', type: 'replay', matchIndex: 0, duration: 7950 },
@@ -857,6 +856,110 @@ async function main(): Promise<void> {
     update: { role: 'admin' },
     create: { id: adminId, role: 'admin', username: 'thumbz-admin' },
   });
+
+  // ---- demo commenters + live comments (streaming-page panel) ----
+  const commenters = [
+    { id: '00000000-0000-4000-8000-000000000201', username: 'raka' },
+    { id: '00000000-0000-4000-8000-000000000202', username: 'adrian' },
+    { id: '00000000-0000-4000-8000-000000000203', username: 'niko' },
+    { id: '00000000-0000-4000-8000-000000000204', username: 'fajar' },
+    { id: '00000000-0000-4000-8000-000000000205', username: 'dimas' },
+    { id: '00000000-0000-4000-8000-000000000206', username: 'miguel' },
+  ];
+  for (const commenter of commenters) {
+    await prisma.profile.upsert({
+      where: { id: commenter.id },
+      update: {},
+      create: commenter,
+    });
+  }
+  const commentFixtures: Array<{
+    match: CreatedMatch;
+    author: string;
+    body: string;
+    secondsAgo: number;
+  }> = [
+    { match: featuredLive, author: 'Raka', body: 'RRQ setup-nya bagus', secondsAgo: 12 },
+    { match: featuredLive, author: 'Adrian', body: 'Lord fight incoming 👀', secondsAgo: 19 },
+    { match: featuredLive, author: 'Niko', body: 'gold gap mulai jauh', secondsAgo: 31 },
+    { match: featuredLive, author: 'Fajar', body: 'comeback possible', secondsAgo: 42 },
+    { match: secondaryLive, author: 'Dimas', body: 'wow turnaround EVOS', secondsAgo: 8 },
+    { match: secondaryLive, author: 'Raka', body: 'BTR draft-nya aneh', secondsAgo: 27 },
+    { match: secondaryLive, author: 'Fajar', body: 'game 3 bakal seru', secondsAgo: 51 },
+    { match: phLive, author: 'Miguel', body: 'lakas ng ONIC ngayon', secondsAgo: 15 },
+    { match: phLive, author: 'Adrian', body: 'Falcons comeback please', secondsAgo: 34 },
+    { match: phLive, author: 'Niko', body: 'solid macro from ONIC PH', secondsAgo: 58 },
+  ];
+  const commenterByName = new Map(
+    commenters.map((c) => [c.username, c]),
+  );
+  // ---- venue ticket configs (demo) ----
+  const ticketFixtures: Array<{
+    match: CreatedMatch;
+    venue: string;
+    city: string;
+    price: number;
+    quota: number;
+  }> = [
+    { match: featuredLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, quota: 5000 },
+    { match: secondaryLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, quota: 3000 },
+    { match: phLive, venue: 'Mall of Asia Arena', city: 'Manila', price: 20, quota: 4000 },
+  ];
+  for (const fixture of ticketFixtures) {
+    await prisma.matchTicketConfig.upsert({
+      where: { match_id: fixture.match.id },
+      update: {
+        venue_name: fixture.venue,
+        venue_city: fixture.city,
+        price_usd: fixture.price,
+        quota_total: fixture.quota,
+        is_active: true,
+      },
+      create: {
+        match_id: fixture.match.id,
+        venue_name: fixture.venue,
+        venue_city: fixture.city,
+        price_usd: fixture.price,
+        quota_total: fixture.quota,
+        is_active: true,
+      },
+    });
+  }
+  for (const upcoming of createdMatches
+    .filter((m) => m.status === 'scheduled')
+    .slice(0, 2)) {
+    await prisma.matchTicketConfig.upsert({
+      where: { match_id: upcoming.id },
+      update: {
+        venue_name: 'Istora Senayan',
+        venue_city: 'Jakarta',
+        price_usd: 15,
+        quota_total: 8000,
+        is_active: true,
+      },
+      create: {
+        match_id: upcoming.id,
+        venue_name: 'Istora Senayan',
+        venue_city: 'Jakarta',
+        price_usd: 15,
+        quota_total: 8000,
+        is_active: true,
+      },
+    });
+  }
+  for (const fixture of commentFixtures) {
+    const profile = commenterByName.get(fixture.author.toLowerCase());
+    if (profile === undefined) continue;
+    await prisma.matchComment.create({
+      data: {
+        match_id: fixture.match.id,
+        user_id: profile.id,
+        author_name: fixture.author,
+        body: fixture.body,
+        created_at: new Date(Date.now() - fixture.secondsAgo * 1_000),
+      },
+    });
+  }
 
   // optional: create the matching Supabase Auth admin user (local stack)
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {

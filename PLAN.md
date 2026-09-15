@@ -388,6 +388,72 @@ Language broadcast variants of a live match (approved contract change: FE needs 
 
 Unique `(match_id, language)` (one feed per language per match). Replace-only via `PUT /admin/matches/:id/broadcasts`; embedded as `broadcasts` (ordered `viewer_count` desc) in every `MatchSummary`/`MatchDetail` where `status = "live"`, plus `GET /matches/:id/broadcasts`. `matches.viewer_count` remains the aggregate ranking number.
 
+#### `match_comments`
+
+Live comments panel of the streaming page (public read, authenticated write, live-only).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `match_id` | uuid | FK → matches (CASCADE) |
+| `user_id` | uuid | FK → profiles (CASCADE); author identity |
+| `author_name` | text | server-side snapshot (JWT name → profile username → `User`) |
+| `body` | text | plain text, 1–280 chars (validated at API) |
+| `created_at` | timestamptz | index `(match_id, created_at desc)` for delta polling |
+
+Append-only (no edit, no soft delete). `GET /matches/:id/comments?after=&limit=` returns newest-first with `meta.next_cursor` for ~5s delta polling (no websocket/SSE by design); `POST /matches/:id/comments` only while the match is `live`, max one comment per user per 3s; `DELETE /me/comments/:id` (own) and `DELETE /admin/comments/:id` (moderation).
+
+#### `match_ticket_configs`
+
+Venue ticket configuration per match (one row per match; no seat categories — flat quota).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `match_id` | uuid PK/unique | FK → matches (CASCADE) |
+| `venue_name` | text | |
+| `venue_city` | text, nullable | |
+| `price_usd` | numeric(10,2) | > 0 |
+| `quota_total` | int | ≥ 1; cannot drop below paid + active holds |
+| `sales_open_at` / `sales_close_at` | timestamptz, nullable | nullable = unbounded |
+| `is_active` | boolean, default true | pause sales without deleting |
+| `created_at` / `updated_at` | timestamptz | |
+
+#### `ticket_orders`
+
+Crypto checkout state per user (+30-minute holds on quota).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `match_id` | uuid | FK → matches (RESTRICT) |
+| `user_id` | uuid | FK → profiles (CASCADE) |
+| `quantity` | int | 1..4 |
+| `unit_price_usd` / `total_usd` | numeric(10,2) | snapshot at order time |
+| `status` | enum `ticket_order_status` | `pending \| paid \| cancelled \| expired \| failed` |
+| `provider` | text | `nowpayments` |
+| `provider_payment_id` | text, unique nullable | set from webhook/invoice |
+| `invoice_url` | text, nullable | hosted checkout |
+| `expires_at` | timestamptz | hold release |
+| `created_at` / `paid_at` | timestamptz | |
+
+Indexes `(match_id, status)`, `(user_id, created_at)`. Quota and the 4-per-user cap are enforced inside a serializable transaction (no oversell).
+
+#### `tickets`
+
+One row per issued ticket (unique QR payload).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `order_id` | uuid | FK → ticket_orders (CASCADE) |
+| `match_id` | uuid | FK → matches (RESTRICT) |
+| `user_id` | uuid | FK → profiles (CASCADE) |
+| `code` | text unique | `THMZ-XXXX-XXXX-XXXX`, unguessable |
+| `status` | enum `ticket_status` | `valid \| used \| void` |
+| `issued_at` | timestamptz | |
+
+Issued exactly once on a verified NOWPayments webhook (`finished`/`confirmed`), idempotent.
+
 ### 6.2 Deliberately NOT modeled
 
 - `standings` table — computed from completed matches.
@@ -496,7 +562,7 @@ Use Prisma interactive transactions (`prisma.$transaction`) — no distributed t
 | Supabase PostgreSQL | database | Prisma connection (pooler URL) |
 | Video/stream providers | none at runtime | `stream_url`/`url` are external URLs consumed by the client player; server never proxies or transcodes |
 
-No payment, email, or analytics integrations in MVP.
+Ticketing with crypto checkout (NOWPayments, USDT auto-convert) was added by explicit product request after MVP scope review (see §6.1 ticket tables and contract §6.1/§6.10). Email and analytics integrations remain out of scope; crypto refunds are manual (provider-side), not automated.
 
 ## 15. Caching
 
@@ -630,6 +696,8 @@ Repository: `thumbz-server`
 
 **Phase 6 — Validation & hardening:** full contract e2e pass, error-shape audits, security checklist re-run, README.
 
+**Phase 7 — Ticketing (approved scope addition):** `match_ticket_configs`/`ticket_orders`/`tickets` + enums, transactional quota enforcement (serializable, 30-minute holds), public availability + order creation, NOWPayments hosted-invoice client, signed IPN webhook issuing codes exactly once, `/me/orders` + `/me/tickets`, admin ticket-config + order monitoring, seed ticket configs, tests.
+
 Phase 2 may start in parallel with Phase 3 by a second agent; Phases 4 and 5 depend on 2 and 3 respectively. The API contract is frozen before Phase 3 begins.
 
 ## 24. Risks
@@ -643,6 +711,8 @@ Phase 2 may start in parallel with Phase 3 by a second agent; Phases 4 and 5 dep
 | Computed aggregates (standings, form) on large tournaments | Slow responses | MVP scale OK; future: materialized views (documented, not built) |
 | Prisma + Supabase pooler quirks (prepared statements) | Runtime errors | Use pooler transaction port / `pgbouncer=true` settings; documented in README |
 | No realtime — live pages poll | Stale viewer counts (≤30s) | Accepted product decision; future Supabase Realtime documented as upgrade path |
+| Crypto price volatility between quote and payment | Under/over-payment | Settlement auto-converts to USDT; invoice amounts are provider-computed per payment |
+| NOWPayments outage/webhook loss | Paid users wait for tickets | `GET /me/orders/:id` polling + provider retries on non-2xx IPN; manual reconcile via `GET /admin/orders` |
 
 ## 25. Definition of done
 
