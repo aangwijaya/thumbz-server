@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HomeService } from './home.service';
+import { TicketsService } from '../tickets/tickets.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 process.env.DATABASE_URL =
@@ -18,7 +19,9 @@ describe('HomeService (integration, local Postgres)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaService();
-    home = new HomeService(prisma);
+    home = new HomeService(prisma, {
+      availabilityForMatches: jest.fn().mockResolvedValue(new Map()),
+    } as unknown as TicketsService);
 
     await prisma.profile.create({ data: { id: userId, role: 'user' } });
     const teamA = await prisma.team.create({

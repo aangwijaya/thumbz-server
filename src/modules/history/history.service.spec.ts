@@ -122,4 +122,11 @@ describe('HistoryService (integration, local Postgres)', () => {
     const { meta } = await history.list(userId, 1, 20);
     expect(meta.total).toBe(1);
   });
+
+  it('stores and returns total_seconds while leaving it untouched when omitted', async () => {
+    await history.put(userId, match1Id, 600, 7200);
+    const first = await history.put(userId, match1Id, 900);
+    expect(first.data.duration_seconds).toBe(900);
+    expect(first.data.total_seconds).toBe(7200);
+  });
 });

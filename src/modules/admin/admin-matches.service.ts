@@ -173,6 +173,9 @@ export class AdminMatchesService {
           viewer_count: dto.viewer_count,
         }),
         ...(dto.featured !== undefined && { featured: dto.featured }),
+        ...(dto.stream_delay_seconds !== undefined && {
+          stream_delay_seconds: dto.stream_delay_seconds,
+        }),
       },
     });
 

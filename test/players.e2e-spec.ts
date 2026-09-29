@@ -247,6 +247,7 @@ describe('Players (e2e)', () => {
           prize_pool: null,
           logo_url: null,
           featured: false,
+          current_stage: null,
         },
         placement: null,
         matches_played: 3,

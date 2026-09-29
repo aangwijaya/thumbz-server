@@ -41,6 +41,7 @@ export class HistoryController {
       user.sub,
       params.matchId,
       body.duration_seconds,
+      body.total_seconds,
     );
   }
 

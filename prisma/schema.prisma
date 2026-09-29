@@ -108,6 +108,7 @@ model Team {
   id              String   @id @default(uuid()) @db.Uuid
   slug            String   @unique
   name            String
+  short_name      String?
   region          String
   logo_url        String?
   color_primary   String?
@@ -128,6 +129,7 @@ model Team {
   PlayerMatchSnapshot PlayerMatchSnapshot[]
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
+  videosWon           Video[]                @relation("VideoWinner")
 
   @@index([name])
   @@map("teams")
@@ -178,6 +180,7 @@ model Match {
   thumbnail_url  String?
   viewer_count   Int          @default(0)
   featured       Boolean      @default(false)
+  stream_delay_seconds Int     @default(30)
   created_at     DateTime     @default(now())
   updated_at     DateTime     @updatedAt
 
@@ -260,11 +263,14 @@ model Video {
   url              String
   thumbnail_url    String?
   duration_seconds Int?
+  game_number      Int?
+  winning_team_id  String?    @db.Uuid
   published_at     DateTime   @default(now())
   created_at       DateTime   @default(now())
   updated_at       DateTime   @updatedAt
 
-  match Match? @relation(fields: [match_id], references: [id], onDelete: SetNull)
+  match       Match? @relation(fields: [match_id], references: [id], onDelete: SetNull)
+  winningTeam Team?  @relation("VideoWinner", fields: [winning_team_id], references: [id], onDelete: Restrict)
 
   @@index([type, published_at(sort: Desc)])
   @@map("videos")
@@ -288,6 +294,7 @@ model WatchHistory {
   match_id         String   @db.Uuid
   watched_at       DateTime @default(now())
   duration_seconds Int?
+  total_seconds    Int?
 
   user  Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
   match Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)

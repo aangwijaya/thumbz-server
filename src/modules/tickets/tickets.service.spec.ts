@@ -298,4 +298,15 @@ describe('TicketsService (integration, local Postgres)', () => {
       tickets.cancelOrder({ sub: USER_A }, again.data.id),
     ).rejects.toBeInstanceOf(BusinessRuleException);
   });
+
+  it('returns batch availability keyed by match id', async () => {
+    const map = await tickets.availabilityForMatches([
+      liveMatchId,
+      completedMatchId,
+      '00000000-0000-4000-8000-000000000000',
+    ]);
+    expect(map.get(liveMatchId)?.quota_total).toBe(50);
+    expect(map.get(completedMatchId)?.quota_total).toBe(50);
+    expect(map.get('00000000-0000-4000-8000-000000000000')).toBeNull();
+  });
 });

@@ -20,6 +20,11 @@ export class CreateTeamDto {
   @IsNotEmpty()
   name: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  short_name?: string | null;
+
   @IsString()
   @IsNotEmpty()
   region: string;

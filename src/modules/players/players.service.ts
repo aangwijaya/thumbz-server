@@ -255,6 +255,7 @@ export class PlayersService {
             prize_pool: tournament.prize_pool,
             logo_url: tournament.logo_url,
             featured: tournament.featured,
+            current_stage: null,
           },
           placement: null,
           matches_played: entry.matches_played,

@@ -18,6 +18,7 @@ export class AdminTeamsService {
       data: {
         slug: dto.slug,
         name: dto.name,
+        short_name: dto.short_name ?? null,
         region: dto.region,
         logo_url: dto.logo_url,
         color_primary: dto.color_primary,
@@ -45,6 +46,7 @@ export class AdminTeamsService {
       data: {
         ...(dto.slug !== undefined && { slug: dto.slug }),
         ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.short_name !== undefined && { short_name: dto.short_name }),
         ...(dto.region !== undefined && { region: dto.region }),
         ...(dto.logo_url !== undefined && { logo_url: dto.logo_url }),
         ...(dto.color_primary !== undefined && {

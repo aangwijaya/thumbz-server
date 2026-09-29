@@ -36,4 +36,13 @@ export class UpdateVideoDto {
   @IsInt()
   @Min(0)
   duration_seconds?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  game_number?: number | null;
+
+  @IsOptional()
+  @IsUUID()
+  winning_team_id?: string | null;
 }

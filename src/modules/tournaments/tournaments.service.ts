@@ -41,6 +41,7 @@ export const SUMMARY_SELECT = {
 } satisfies Prisma.TournamentSelect;
 
 export interface TournamentSummary {
+  current_stage: string | null;
   id: string;
   slug: string;
   name: string;
@@ -105,12 +106,61 @@ export function rankStandings(rows: StandingsInput[]): RankedStanding[] {
 
 export function toTournamentSummary(
   row: Prisma.TournamentGetPayload<{ select: typeof SUMMARY_SELECT }>,
+  currentStage: string | null = null,
 ): TournamentSummary {
   return {
     ...row,
     start_date: formatDateOnly(row.start_date),
     end_date: formatDateOnly(row.end_date),
+    current_stage: currentStage,
   };
+}
+
+export async function computeCurrentStages(
+  prisma: PrismaService,
+  tournamentIds: string[],
+): Promise<Map<string, string | null>> {
+  const result = new Map<string, string | null>();
+  if (tournamentIds.length === 0) {
+    return result;
+  }
+  const rows = await prisma.match.findMany({
+    where: { tournament_id: { in: tournamentIds }, stage: { not: null } },
+    select: {
+      tournament_id: true,
+      stage: true,
+      status: true,
+      scheduled_at: true,
+    },
+  });
+  const orderOf = (stage: string): number =>
+    STAGE_ORDER.indexOf(stage as (typeof STAGE_ORDER)[number]);
+
+  for (const id of tournamentIds) {
+    const mine = rows.filter((r) => r.tournament_id === id);
+    const live = mine.filter((r) => r.status === 'live');
+    const scheduled = mine.filter((r) => r.status === 'scheduled');
+    const completed = mine.filter((r) => r.status === 'completed');
+    let stage: string | null = null;
+    if (live.length > 0) {
+      stage = live.reduce((best, r) =>
+        orderOf(r.stage as string) > orderOf(best.stage as string) ? r : best,
+      ).stage;
+    } else if (scheduled.length > 0) {
+      const next = scheduled.sort(
+        (a, b) =>
+          orderOf(a.stage as string) - orderOf(b.stage as string) ||
+          a.scheduled_at.getTime() - b.scheduled_at.getTime(),
+      )[0];
+      stage = next?.stage;
+    } else if (completed.length > 0) {
+      stage = completed.reduce((best, r) =>
+        orderOf(r.stage as string) > orderOf(best.stage as string) ? r : best,
+      ).stage;
+    }
+    result.set(id, stage);
+  }
+  return result;
 }
 
 @Injectable()
@@ -144,8 +194,14 @@ export class TournamentsService {
       this.prisma.tournament.count({ where }),
     ]);
 
+    const stages = await computeCurrentStages(
+      this.prisma,
+      rows.map((row) => row.id),
+    );
     return {
-      data: rows.map(toTournamentSummary),
+      data: rows.map((row) =>
+        toTournamentSummary(row, stages.get(row.id) ?? null),
+      ),
       meta: buildPaginationMeta(page, pageSize, total),
     };
   }
@@ -158,8 +214,12 @@ export class TournamentsService {
     if (row === null) {
       throw new NotFoundException();
     }
+    const stages = await computeCurrentStages(this.prisma, [id]);
     return {
-      data: { ...toTournamentSummary(row), description: row.description },
+      data: {
+        ...toTournamentSummary(row, stages.get(id) ?? null),
+        description: row.description,
+      },
     };
   }
 

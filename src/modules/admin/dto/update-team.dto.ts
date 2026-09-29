@@ -24,6 +24,11 @@ export class UpdateTeamDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(40)
+  short_name?: string | null;
+
+  @IsOptional()
+  @IsString()
   @IsNotEmpty()
   region?: string;
 

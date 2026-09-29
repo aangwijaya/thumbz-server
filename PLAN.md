@@ -373,6 +373,18 @@ Unique `(match_id, player_id, item_name, purchased_at)`. Index `(match_id, purch
 
 No unique constraint (duplicates tolerated on retry). Index `(match_id, occurred_at)`.
 
+#### Column additions (approved FE requests)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `matches.stream_delay_seconds` | int, default 30 | spoiler-shield delay, admin-adjustable 0..600 |
+| `videos.game_number` | int, nullable | game within the series a replay covers |
+| `videos.winning_team_id` | uuid, nullable FK → teams (RESTRICT) | per-game winner, must belong to the linked match |
+| `teams.short_name` | text, nullable | narrow-space label (RRQ, ONIC, ...) |
+| `watch_history.total_seconds` | int, nullable | total player duration reported by the client |
+
+`tournaments.current_stage` is computed at read time (live stage → earliest scheduled stage → latest completed stage) — not stored. Home `upcoming` items embed the venue `ticket` availability inline.
+
 #### `match_broadcasts`
 
 Language broadcast variants of a live match (approved contract change: FE needs per-language feeds — MPL ID `id`+`en`, MPL PH `tl`+`en`, MPL MY `ms`+`en`, ... — rendered as distinct list entries).
