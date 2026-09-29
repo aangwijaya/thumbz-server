@@ -15,6 +15,7 @@ export interface WatchHistoryItem {
   match_id: string;
   watched_at: Date;
   duration_seconds: number | null;
+  total_seconds: number | null;
   match: MatchSummary;
 }
 
@@ -27,6 +28,7 @@ function toItem(
     match_id: row.match_id,
     watched_at: row.watched_at,
     duration_seconds: row.duration_seconds,
+    total_seconds: row.total_seconds,
     match: toMatchSummary(row.match),
   };
 }
@@ -63,6 +65,7 @@ export class HistoryService {
     userId: string,
     matchId: string,
     durationSeconds?: number,
+    totalSeconds?: number,
   ): Promise<{ data: WatchHistoryItem }> {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
@@ -81,12 +84,14 @@ export class HistoryService {
         ...(durationSeconds !== undefined && {
           duration_seconds: durationSeconds,
         }),
+        ...(totalSeconds !== undefined && { total_seconds: totalSeconds }),
       },
       create: {
         user_id: userId,
         match_id: matchId,
         watched_at: new Date(),
         duration_seconds: durationSeconds ?? null,
+        total_seconds: totalSeconds ?? null,
       },
     });
 

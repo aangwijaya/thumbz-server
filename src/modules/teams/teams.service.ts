@@ -17,6 +17,7 @@ export const SUMMARY_SELECT = {
   id: true,
   slug: true,
   name: true,
+  short_name: true,
   region: true,
   logo_url: true,
   color_primary: true,
@@ -27,6 +28,7 @@ export const SUMMARY_SELECT = {
 export type TeamRow = Prisma.TeamGetPayload<{ select: typeof SUMMARY_SELECT }>;
 
 export interface TeamSummary {
+  short_name: string | null;
   id: string;
   slug: string;
   name: string;
@@ -57,6 +59,7 @@ export function toTeamSummary(row: TeamRow): TeamSummary {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    short_name: row.short_name,
     region: row.region,
     logo_url: row.logo_url,
     color_primary: row.color_primary,

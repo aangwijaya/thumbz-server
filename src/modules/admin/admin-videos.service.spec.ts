@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { AdminVideosService } from './admin-videos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -139,5 +140,49 @@ describe('AdminVideosService (integration, local Postgres)', () => {
     await expect(
       adminVideos.remove('00000000-0000-4000-8000-000000000000'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('records a per-game result with a valid winning team', async () => {
+    const created = await adminVideos.create({
+      ...base,
+      match_id: matchId,
+      url: 'https://e2e.example.com/video-result',
+      game_number: 2,
+      winning_team_id: teamAId,
+    });
+    expect(created.data.result).not.toBeNull();
+    expect(created.data.result?.game_number).toBe(2);
+    expect(created.data.result?.winner_team?.id).toBe(teamAId);
+
+    const listed = await adminVideos.update(
+      (
+        await prisma.video.findFirstOrThrow({
+          where: { url: 'https://e2e.example.com/video-result' },
+        })
+      ).id,
+      { winning_team_id: null },
+    );
+    expect(listed.data.result).toBeNull();
+  });
+
+  it('rejects a winning team outside the match and missing game_number', async () => {
+    await expect(
+      adminVideos.create({
+        ...base,
+        match_id: matchId,
+        url: 'https://e2e.example.com/video-bad-result',
+        game_number: 1,
+        winning_team_id: '00000000-0000-4000-8000-000000000000',
+      }),
+    ).rejects.toBeInstanceOf(BusinessRuleException);
+
+    await expect(
+      adminVideos.create({
+        ...base,
+        match_id: matchId,
+        url: 'https://e2e.example.com/video-no-game',
+        winning_team_id: teamAId,
+      }),
+    ).rejects.toBeInstanceOf(BusinessRuleException);
   });
 });

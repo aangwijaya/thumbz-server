@@ -158,6 +158,75 @@ export class TicketsService {
     };
   }
 
+  async availabilityForMatches(
+    matchIds: string[],
+  ): Promise<Map<string, TicketAvailability | null>> {
+    const result = new Map<string, TicketAvailability | null>();
+    if (matchIds.length === 0) {
+      return result;
+    }
+    const now = new Date();
+    const configs = await this.prisma.matchTicketConfig.findMany({
+      where: { match_id: { in: matchIds } },
+    });
+    const matches = await this.prisma.match.findMany({
+      where: { id: { in: matchIds } },
+      select: { id: true, status: true },
+    });
+    const ticketCounts = await this.prisma.ticket.groupBy({
+      by: ['match_id'],
+      where: { match_id: { in: matchIds } },
+      _count: true,
+    });
+    const holds = await this.prisma.ticketOrder.groupBy({
+      by: ['match_id'],
+      where: {
+        match_id: { in: matchIds },
+        status: 'pending',
+        expires_at: { gt: now },
+      },
+      _sum: { quantity: true },
+    });
+    const configByMatch = new Map(configs.map((c) => [c.match_id, c]));
+    const statusByMatch = new Map(matches.map((m) => [m.id, m.status]));
+    const soldByMatch = new Map(
+      ticketCounts.map((t) => [t.match_id, t._count]),
+    );
+    const heldByMatch = new Map(
+      holds.map((h) => [h.match_id, h._sum?.quantity ?? 0]),
+    );
+
+    for (const id of matchIds) {
+      const config = configByMatch.get(id);
+      if (config === undefined) {
+        result.set(id, null);
+        continue;
+      }
+      const remaining = Math.max(
+        0,
+        config.quota_total -
+          (soldByMatch.get(id) ?? 0) -
+          (heldByMatch.get(id) ?? 0),
+      );
+      const status = statusByMatch.get(id);
+      result.set(id, {
+        match_id: id,
+        venue_name: config.venue_name,
+        venue_city: config.venue_city,
+        price_usd: Number(config.price_usd),
+        quota_total: config.quota_total,
+        quota_remaining: remaining,
+        sales_open_at: config.sales_open_at,
+        sales_close_at: config.sales_close_at,
+        on_sale:
+          this.windowOpen(config) &&
+          (status === 'scheduled' || status === 'live') &&
+          remaining > 0,
+      });
+    }
+    return result;
+  }
+
   async createOrder(
     matchId: string,
     user: CurrentUser,

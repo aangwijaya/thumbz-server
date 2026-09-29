@@ -7,6 +7,26 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListVideosDto } from './dto/list-videos.dto';
 
+export const VIDEO_WINNER_SELECT = {
+  id: true,
+  slug: true,
+  name: true,
+  short_name: true,
+  region: true,
+  logo_url: true,
+  color_primary: true,
+  color_secondary: true,
+  is_active: true,
+} satisfies Prisma.TeamSelect;
+
+export const VIDEO_INCLUDE = {
+  winningTeam: { select: VIDEO_WINNER_SELECT },
+} satisfies Prisma.VideoInclude;
+
+export type VideoRow = Prisma.VideoGetPayload<{
+  include: typeof VIDEO_INCLUDE;
+}>;
+
 export interface VideoSummary {
   id: string;
   match_id: string | null;
@@ -16,11 +36,13 @@ export interface VideoSummary {
   thumbnail_url: string | null;
   duration_seconds: number | null;
   published_at: Date;
+  result: {
+    game_number: number | null;
+    winner_team: VideoRow['winningTeam'];
+  } | null;
 }
 
-export function toVideoSummary(
-  row: Prisma.VideoGetPayload<Record<string, never>>,
-): VideoSummary {
+export function toVideoSummary(row: VideoRow): VideoSummary {
   return {
     id: row.id,
     match_id: row.match_id,
@@ -30,6 +52,10 @@ export function toVideoSummary(
     thumbnail_url: row.thumbnail_url,
     duration_seconds: row.duration_seconds,
     published_at: row.published_at,
+    result:
+      row.winning_team_id !== null
+        ? { game_number: row.game_number, winner_team: row.winningTeam }
+        : null,
   };
 }
 
@@ -53,6 +79,7 @@ export class VideosService {
         orderBy: { published_at: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: VIDEO_INCLUDE,
       }),
       this.prisma.video.count({ where }),
     ]);

@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -7,11 +8,19 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 import { match_stage, match_status } from '@prisma/client';
 
 export class UpdateMatchDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(600)
+  stream_delay_seconds?: number;
+
   @IsOptional()
   @IsUUID()
   tournament_id?: string | null;

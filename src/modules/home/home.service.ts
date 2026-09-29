@@ -17,7 +17,13 @@ import {
   TournamentSummary,
   toTournamentSummary,
 } from '../tournaments/tournaments.service';
-import { toVideoSummary, VideoSummary } from '../videos/videos.service';
+import {
+  VIDEO_INCLUDE,
+  toVideoSummary,
+  VideoSummary,
+} from '../videos/videos.service';
+import { TicketAvailability, TicketsService } from '../tickets/tickets.service';
+import { computeCurrentStages } from '../tournaments/tournaments.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface HomeContinueWatchingItem {
@@ -30,7 +36,7 @@ export interface HomeContinueWatchingItem {
 export interface HomePayload {
   featured_live_match: MatchDetail | null;
   live_now: MatchSummary[];
-  upcoming: MatchSummary[];
+  upcoming: Array<MatchSummary & { ticket: TicketAvailability | null }>;
   featured_tournaments: TournamentSummary[];
   popular_teams: TeamSummary[];
   latest_videos: VideoSummary[];
@@ -41,7 +47,10 @@ const NINETY_DAYS_MS = 90 * 24 * 3_600_000;
 
 @Injectable()
 export class HomeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tickets: TicketsService,
+  ) {}
 
   async getHome(sub?: string): Promise<{ data: HomePayload }> {
     const now = new Date();
@@ -81,6 +90,7 @@ export class HomeService {
       this.prisma.video.findMany({
         orderBy: { published_at: 'desc' },
         take: 12,
+        include: VIDEO_INCLUDE,
       }),
       this.prisma.match.findMany({
         where: {
@@ -134,17 +144,36 @@ export class HomeService {
       }));
     }
 
+    const stageMap = await computeCurrentStages(
+      this.prisma,
+      tournamentRows.map((row) => row.id),
+    );
+
     return {
       data: {
         featured_live_match:
           featuredRow === null ? null : toMatchDetail(featuredRow),
         live_now: liveRows.map(toMatchSummary),
-        upcoming: upcomingRows.map(toMatchSummary),
-        featured_tournaments: tournamentRows.map(toTournamentSummary),
+        upcoming: await this.withTickets(upcomingRows.map(toMatchSummary)),
+        featured_tournaments: tournamentRows.map((row) =>
+          toTournamentSummary(row, stageMap.get(row.id) ?? null),
+        ),
         popular_teams: popularTeams,
         latest_videos: videoRows.map(toVideoSummary),
         continue_watching: continueWatching,
       },
     };
+  }
+
+  private async withTickets(
+    matches: MatchSummary[],
+  ): Promise<Array<MatchSummary & { ticket: TicketAvailability | null }>> {
+    const ticketMap = await this.tickets.availabilityForMatches(
+      matches.map((match) => match.id),
+    );
+    return matches.map((match) => ({
+      ...match,
+      ticket: ticketMap.get(match.id) ?? null,
+    }));
   }
 }

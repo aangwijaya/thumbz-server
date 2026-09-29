@@ -77,6 +77,7 @@ const TOURNAMENTS: Array<{
 const TEAMS: Array<{
   slug: string;
   name: string;
+  short_name?: string;
   region: string;
   color_primary: string;
   color_secondary: string | null;
@@ -84,20 +85,20 @@ const TEAMS: Array<{
   description: string | null;
   logo?: string;
 }> = [
-  { slug: 'onic', name: 'ONIC Esports', region: 'Indonesia', color_primary: '#F5C518', color_secondary: '#0A0A0A', founded_year: 2018, description: 'Twice MPL Indonesia champions.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/onic-b-256.png' },
-  { slug: 'rrq', name: 'RRQ Hoshi', region: 'Indonesia', color_primary: '#7B2EFF', color_secondary: null, founded_year: 2017, description: 'One of the most decorated Indonesian teams.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/rrq-500.png' },
-  { slug: 'evos', name: 'EVOS Legends', region: 'Indonesia', color_primary: '#1E90FF', color_secondary: null, founded_year: 2016, description: 'Legacy Indonesian powerhouse.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/evos-500.png' },
-  { slug: 'btr', name: 'Bigetron by Vitality', region: 'Indonesia', color_primary: '#E53935', color_secondary: null, founded_year: 2019, description: 'The Alpha squad from Bandung.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/btr_vit.png' },
-  { slug: 'tlid', name: 'Team Liquid ID', region: 'Indonesia', color_primary: '#00A9E0', color_secondary: null, founded_year: 2023, description: 'Indonesian branch of Team Liquid.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/TLID-Primary500x500.png' },
-  { slug: 'ae', name: 'Alter Ego', region: 'Indonesia', color_primary: '#E91E63', color_secondary: null, founded_year: 2020, description: 'Energetic Jakarta contenders.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/ae-256.png' },
-  { slug: 'dewa', name: 'Dewa United Esports', region: 'Indonesia', color_primary: '#16A34A', color_secondary: null, founded_year: 2020, description: 'Dewa United Esports from Jakarta.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/dewa-united-500.png' },
-  { slug: 'geek', name: 'Geek Fam ID', region: 'Indonesia', color_primary: '#F59E0B', color_secondary: null, founded_year: 2019, description: 'Geek Fam Indonesian roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/geek-500.png' },
-  { slug: 'navi', name: 'NAVI', region: 'Indonesia', color_primary: '#FDD835', color_secondary: '#0A0A0A', founded_year: 2021, description: 'NAVI Indonesian division.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/NAVI-2.png' },
-  { slug: 'onicph', name: 'ONIC Philippines', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'ONIC Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/onicph-bw-400.webp' },
-  { slug: 'apbren', name: 'AP.Bren', region: 'Philippines', color_primary: '#B8860B', color_secondary: null, founded_year: 2023, description: 'Former Falcons AP.Bren, now competing as AP.Bren.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/apbren-400.webp' },
-  { slug: 'aurora', name: 'Aurora Gaming', region: 'Philippines', color_primary: '#22D3EE', color_secondary: null, founded_year: 2022, description: 'Rising Philippine organisation.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/aurora-gaming-400.webp' },
-  { slug: 'falcons', name: 'Falcons', region: 'Philippines', color_primary: '#CA8A04', color_secondary: null, founded_year: 2025, description: 'Falcons Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/falcon-400.webp' },
-  { slug: 'srg', name: 'Selangor Red Giants', region: 'Malaysia', color_primary: '#D32F2F', color_secondary: null, founded_year: 2019, description: 'Malaysian champions.' },
+  { slug: 'onic', short_name: 'ONIC', name: 'ONIC Esports', region: 'Indonesia', color_primary: '#F5C518', color_secondary: '#0A0A0A', founded_year: 2018, description: 'Twice MPL Indonesia champions.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/onic-b-256.png' },
+  { slug: 'rrq', short_name: 'RRQ', name: 'RRQ Hoshi', region: 'Indonesia', color_primary: '#7B2EFF', color_secondary: null, founded_year: 2017, description: 'One of the most decorated Indonesian teams.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/rrq-500.png' },
+  { slug: 'evos', short_name: 'EVOS', name: 'EVOS Legends', region: 'Indonesia', color_primary: '#1E90FF', color_secondary: null, founded_year: 2016, description: 'Legacy Indonesian powerhouse.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/evos-500.png' },
+  { slug: 'btr', short_name: 'BTR', name: 'Bigetron by Vitality', region: 'Indonesia', color_primary: '#E53935', color_secondary: null, founded_year: 2019, description: 'The Alpha squad from Bandung.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/btr_vit.png' },
+  { slug: 'tlid', short_name: 'TLID', name: 'Team Liquid ID', region: 'Indonesia', color_primary: '#00A9E0', color_secondary: null, founded_year: 2023, description: 'Indonesian branch of Team Liquid.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/TLID-Primary500x500.png' },
+  { slug: 'ae', short_name: 'AE', name: 'Alter Ego', region: 'Indonesia', color_primary: '#E91E63', color_secondary: null, founded_year: 2020, description: 'Energetic Jakarta contenders.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/ae-256.png' },
+  { slug: 'dewa', short_name: 'DEWA', name: 'Dewa United Esports', region: 'Indonesia', color_primary: '#16A34A', color_secondary: null, founded_year: 2020, description: 'Dewa United Esports from Jakarta.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/dewa-united-500.png' },
+  { slug: 'geek', short_name: 'GEEK', name: 'Geek Fam ID', region: 'Indonesia', color_primary: '#F59E0B', color_secondary: null, founded_year: 2019, description: 'Geek Fam Indonesian roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/geek-500.png' },
+  { slug: 'navi', short_name: 'NAVI', name: 'NAVI', region: 'Indonesia', color_primary: '#FDD835', color_secondary: '#0A0A0A', founded_year: 2021, description: 'NAVI Indonesian division.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/NAVI-2.png' },
+  { slug: 'onicph', short_name: 'ONIC PH', name: 'ONIC Philippines', region: 'Philippines', color_primary: '#FF7300', color_secondary: null, founded_year: 2024, description: 'ONIC Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/onicph-bw-400.webp' },
+  { slug: 'apbren', short_name: 'APB', name: 'AP.Bren', region: 'Philippines', color_primary: '#B8860B', color_secondary: null, founded_year: 2023, description: 'Former Falcons AP.Bren, now competing as AP.Bren.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/apbren-400.webp' },
+  { slug: 'aurora', short_name: 'AUR', name: 'Aurora Gaming', region: 'Philippines', color_primary: '#22D3EE', color_secondary: null, founded_year: 2022, description: 'Rising Philippine organisation.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/aurora-gaming-400.webp' },
+  { slug: 'falcons', short_name: 'FLC', name: 'Falcons', region: 'Philippines', color_primary: '#CA8A04', color_secondary: null, founded_year: 2025, description: 'Falcons Philippine roster.', logo: 'https://wsrv.nl/?url=https://ik.imagekit.io/nloe8dhf7w/mplph/s18/teams/falcon-400.webp' },
+  { slug: 'srg', short_name: 'SRG', name: 'Selangor Red Giants', region: 'Malaysia', color_primary: '#D32F2F', color_secondary: null, founded_year: 2019, description: 'Malaysian champions.' },
 ];
 
 const ROLES = ['gold', 'mid', 'exp', 'jungle', 'coach'] as const;
@@ -269,6 +270,9 @@ async function createMatch(input: {
   viewerCount?: number;
   streamUrl?: string | null;
   thumbnailUrl?: string;
+  scoreA?: number;
+  scoreB?: number;
+  gameNumber?: number | null;
 }): Promise<CreatedMatch> {
   const rand = mulberry32(
     input.scheduledAt.getTime() ^ input.teamAId.length ^ input.teamBId.length,
@@ -285,9 +289,20 @@ async function createMatch(input: {
       status: input.status,
       stage: input.stage,
       best_of: 3,
-      score_a: input.status === 'completed' ? scoreA : null,
-      score_b: input.status === 'completed' ? scoreB : null,
+      score_a:
+        input.scoreA !== undefined
+          ? input.scoreA
+          : input.status === 'completed'
+            ? scoreA
+            : null,
+      score_b:
+        input.scoreB !== undefined
+          ? input.scoreB
+          : input.status === 'completed'
+            ? scoreB
+            : null,
       winner_team_id: input.status === 'completed' ? winner : null,
+      game_number: input.gameNumber ?? null,
       scheduled_at: input.scheduledAt,
       ended_at: input.endedAt,
       started_at:
@@ -566,6 +581,7 @@ async function main(): Promise<void> {
       data: {
         slug: team.slug,
         name: team.name,
+        short_name: team.short_name ?? null,
         region: team.region,
         color_primary: team.color_primary,
         color_secondary: team.color_secondary,
@@ -679,6 +695,9 @@ async function main(): Promise<void> {
     viewerCount: 18400,
     streamUrl: SEED_STREAM_URL,
     thumbnailUrl: SEED_LIVE_THUMB_ID,
+    scoreA: 1,
+    scoreB: 1,
+    gameNumber: 3,
   });
   createdMatches.push(featuredLive);
   const secondaryLive = await createMatch({
@@ -692,6 +711,9 @@ async function main(): Promise<void> {
     viewerCount: 9200,
     streamUrl: SEED_STREAM_URL,
     thumbnailUrl: SEED_LIVE_THUMB_ID,
+    scoreA: 1,
+    scoreB: 0,
+    gameNumber: 2,
   });
   createdMatches.push(secondaryLive);
   // upcoming
@@ -739,6 +761,9 @@ async function main(): Promise<void> {
     viewerCount: 6100,
     streamUrl: SEED_STREAM_URL,
     thumbnailUrl: SEED_LIVE_THUMB_PH,
+    scoreA: 1,
+    scoreB: 1,
+    gameNumber: 3,
   });
   createdMatches.push(phLive);
   for (let i = 1; i <= 2; i++) {
@@ -831,8 +856,19 @@ async function main(): Promise<void> {
   ];
   let videoIndex = 0;
   for (const video of videoFixtures) {
+    const linkedMatch =
+      video.matchIndex !== null ? completed[video.matchIndex] : undefined;
+    const withResult =
+      video.type === 'replay' && linkedMatch !== undefined;
     await prisma.video.create({
       data: {
+        game_number: withResult ? ((videoIndex % 3) + 1) : null,
+        winning_team_id: withResult
+          ? (await prisma.match.findUniqueOrThrow({
+              where: { id: linkedMatch.id },
+              select: { winner_team_id: true },
+            })).winner_team_id
+          : null,
         title: video.title,
         type: video.type,
         url: SEED_STREAM_URL,

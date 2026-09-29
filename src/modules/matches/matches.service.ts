@@ -111,6 +111,7 @@ export interface MatchSummary {
   thumbnail_url: string | null;
   viewer_count: number;
   featured: boolean;
+  stream_delay_seconds: number;
   broadcasts: BroadcastSummary[];
 }
 
@@ -169,6 +170,7 @@ export function toMatchSummary(row: SummaryRow): MatchSummary {
     thumbnail_url: row.thumbnail_url,
     viewer_count: row.viewer_count,
     featured: row.featured,
+    stream_delay_seconds: row.stream_delay_seconds,
     broadcasts:
       row.status === 'live'
         ? row.broadcasts.map((b) => ({
