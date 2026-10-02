@@ -901,6 +901,11 @@ async function main(): Promise<void> {
     { id: '00000000-0000-4000-8000-000000000204', username: 'fajar' },
     { id: '00000000-0000-4000-8000-000000000205', username: 'dimas' },
     { id: '00000000-0000-4000-8000-000000000206', username: 'miguel' },
+    { id: '00000000-0000-4000-8000-000000000207', username: 'sinta' },
+    { id: '00000000-0000-4000-8000-000000000208', username: 'bimo' },
+    { id: '00000000-0000-4000-8000-000000000209', username: 'yudha' },
+    { id: '00000000-0000-4000-8000-000000000210', username: 'clara' },
+    { id: '00000000-0000-4000-8000-000000000211', username: 'rafi' },
   ];
   for (const commenter of commenters) {
     await prisma.profile.upsert({
@@ -919,6 +924,11 @@ async function main(): Promise<void> {
     { match: featuredLive, author: 'Adrian', body: 'Lord fight incoming 👀', secondsAgo: 19 },
     { match: featuredLive, author: 'Niko', body: 'gold gap mulai jauh', secondsAgo: 31 },
     { match: featuredLive, author: 'Fajar', body: 'comeback possible', secondsAgo: 42 },
+    { match: featuredLive, author: 'Sinta', body: 'RRQ farming-nya rapi banget', secondsAgo: 65 },
+    { match: featuredLive, author: 'Bimo', body: 'Alter Ego harus cari pick-off', secondsAgo: 78 },
+    { match: featuredLive, author: 'Yudha', body: 'turtle contest krusial nih', secondsAgo: 95 },
+    { match: featuredLive, author: 'Clara', body: 'game 3 makin tegang 🔥', secondsAgo: 120 },
+    { match: featuredLive, author: 'Rafi', body: 'tower mid hampir jatuh', secondsAgo: 150 },
     { match: secondaryLive, author: 'Dimas', body: 'wow turnaround EVOS', secondsAgo: 8 },
     { match: secondaryLive, author: 'Raka', body: 'BTR draft-nya aneh', secondsAgo: 27 },
     { match: secondaryLive, author: 'Fajar', body: 'game 3 bakal seru', secondsAgo: 51 },
