@@ -21,3 +21,12 @@ npm-debug.log*
 
 # OS
 .DS_Store
+
+# agent tooling artifacts
+.agents/
+.claude/
+.hermes/
+skills-lock.json
+
+# local media source files (uploaded to Supabase Storage; not part of the build)
+/static
