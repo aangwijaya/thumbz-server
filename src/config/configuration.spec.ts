@@ -116,6 +116,15 @@ describe('configuration', () => {
       xenditApiBase: 'https://api.xendit.co',
       paymentsSandbox: false,
       ticketSigningSecret: 'dev-only-ticket-signing-secret-change-me',
+      drmMasterKey: '0'.repeat(63) + '1',
+      playbackTokenSecret: 'dev-only-playback-token-secret-change-me',
+      maxStreamsPerUser: 2,
+      drmLicenseUrls: {
+        widevine: null,
+        playready: null,
+        fairplay: null,
+        fairplayCertificate: null,
+      },
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,
       nowpaymentsApiBase: 'https://api-sandbox.nowpayments.io',
@@ -162,6 +171,8 @@ describe('validateEnv in production', () => {
         FRONTEND_URL: 'https://thumbz.example',
         REDIS_URL: 'redis://default:pw@redis.internal:6379',
         TICKET_SIGNING_SECRET: 'x'.repeat(32),
+        DRM_MASTER_KEY: 'a'.repeat(64),
+        PLAYBACK_TOKEN_SECRET: 'p'.repeat(32),
       }),
     ).not.toThrow();
   });

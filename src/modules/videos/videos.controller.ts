@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { MatchIdParamsDto } from '../matches/dto/match-id-params.dto';
 import { ListVideosDto } from './dto/list-videos.dto';
 import { VideoSummary, VideosService } from './videos.service';
 import { Cached } from '../../infra/cache/cached.decorator';
@@ -19,5 +20,12 @@ export class VideosController {
     @Query() query: ListVideosDto,
   ): Promise<{ data: VideoSummary[]; meta: ListMeta }> {
     return this.videosService.list(query);
+  }
+
+  @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
+  @Get(':id')
+  get(@Param() params: MatchIdParamsDto): Promise<{ data: VideoSummary }> {
+    return this.videosService.get(params.id);
   }
 }

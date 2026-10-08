@@ -30,3 +30,6 @@ skills-lock.json
 
 # local media source files (uploaded to Supabase Storage; not part of the build)
 /static
+
+# packaged media (contains content keys until registered)
+/media-out

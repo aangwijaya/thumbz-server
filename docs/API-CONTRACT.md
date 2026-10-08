@@ -207,6 +207,16 @@ Public reads are cached server-side (Redis) and are CDN-cacheable; everything el
 | Method | URL | Access |
 | --- | --- | --- |
 | `GET` | `/videos` | public |
+| `GET` | `/videos/:id` | public |
+| `POST` | `/playback/sessions` | authenticated |
+| `POST` | `/playback/sessions/:sid/heartbeat` | authenticated (owner) |
+| `DELETE` | `/playback/sessions/:sid` | authenticated (owner) |
+| `POST` | `/drm/clearkey/license` | playback token (Bearer) |
+| `GET` | `/playback/:sid/hls/master.m3u8`, `/playback/:sid/hls/variant` | playback token (`?token=`) |
+| `GET` | `/drm/hls/key` | playback token (`?token=`) |
+| `POST` | `/drm/authorize` | playback token (body) |
+
+See §17 for protected playback.
 
 ### 5.6 Aggregation
 
@@ -923,6 +933,11 @@ Aggregates computed from `player_match_statistics` + match outcomes. `404` when 
 
 - `result` is `null` for videos without a recorded per-game result (highlights, trailers, or replays not linked to a specific game). When present, `winner_team` is a `TeamSummary` of the game winner; clients hide it while spoiler mode is on.
 - `game_number` is the game within the series (1-based) the video covers.
+- `media` (additive) is `{ id, protection }` when the video has a protected asset (`protection: none|clearkey_aes|multidrm`), else `null`. Play such videos through §17, not `url`.
+
+#### `GET /videos/:id`
+
+Single `VideoSummary` (same shape as list items). `404` when unknown.
 
 ### 6.6 Home aggregation
 
@@ -1639,3 +1654,43 @@ Order statuses now include `refund_required`. A `reconcile-payments` job (every 
 **Tickets** carry `qr_payload` = `THMZ1.<code>.<hmac>`; render it as the QR code. `POST /admin/tickets/check-in { payload }` (admin, venue scanners) → `{ data: { result: "checked_in" | "already_used" | "void" | "invalid", code } }`; each ticket is admitted once (atomic). Voided tickets no longer count against the quota.
 
 **Realtime**: buyers receive `order:update` in their user room when an order changes (paid, expired, refund_required).
+
+## 17. Protected playback (DRM)
+
+VOD/replays can be encrypted once and served from the public storage CDN — segments are useless without the content key, so access control lives in **key delivery**, not in hiding files.
+
+| Asset `protection` | Packaging | Key systems offered |
+| --- | --- | --- |
+| `clearkey_aes` | DASH CENC (`cenc`, one KID) + HLS AES-128 with the same key | `org.w3.clearkey` (MSE/EME browsers), HLS AES-128 key server (Safari/iOS native) |
+| `multidrm` | Packaged with a commercial DRM provider | `com.widevine.alpha`, `com.microsoft.playready`, `com.apple.fps` when their license URLs are configured, plus ClearKey if a KID is stored |
+
+Content keys are stored only sealed (AES-256-GCM envelope under `DRM_MASTER_KEY`, KID as authenticated data).
+
+**Open a session** — `POST /playback/sessions { asset_id }` (signed in). At most `MAX_STREAMS_PER_USER` (default 2) concurrent sessions per account; a session that misses three heartbeats stops counting. Over the limit → `409 CONFLICT` with message `Too many devices are streaming on this account (max N)`.
+
+```json
+{ "data": {
+  "session_id": "uuid", "token": "<playback JWT, 10 min>", "expires_at": "…", "heartbeat_seconds": 30,
+  "asset": { "id": "uuid", "title": "…", "protection": "clearkey_aes", "duration_seconds": 60 },
+  "sources": {
+    "dash": { "manifest_url": "https://cdn/…/manifest.mpd",
+              "key_systems": { "org.w3.clearkey": { "license_url": "https://api/…/drm/clearkey/license" },
+                               "com.widevine.alpha": { "license_url": "…", "headers": { "x-thumbz-playback": "<token>" } } } },
+    "hls": { "manifest_url": "https://api/…/playback/<sid>/hls/master.m3u8?token=…" }
+  } } }
+```
+
+- `POST /playback/sessions/:sid/heartbeat` every `heartbeat_seconds` → `{ data: { token, expires_at } }` (rotated token; use it for later license/key requests). `404` once the session was evicted or ended.
+- `DELETE /playback/sessions/:sid` → `204`; the session's token stops working immediately.
+- The playback token is bound to user + asset + session. Every license/key endpoint also checks the session is still open, so ending a session revokes it before expiry.
+
+**ClearKey license** — `POST /drm/clearkey/license`, header `Authorization: Bearer <playback token>`, W3C EME JSON body `{ "kids": ["<b64url kid>"], "type": "temporary" }` → `{ "keys": [{ "kty": "oct", "kid": "…", "k": "<b64url key>" }], "type": "temporary" }`. Only the session asset's KID is released (`403` otherwise); missing/invalid/revoked token → `401`. `Cache-Control: no-store`.
+
+**HLS AES-128 (Safari/iOS)** — the native player cannot attach headers, so the token rides in the query string of a manifest proxy:
+- `GET /playback/:sid/hls/master.m3u8?token=` rewrites variant URIs to `GET /playback/:sid/hls/variant?path=&token=` (token must belong to `:sid`, else `403`).
+- The variant playlist's `#EXT-X-KEY` URI becomes `GET /drm/hls/key?token=` (16 raw bytes, `application/octet-stream`, `no-store`); segment URIs become absolute CDN URLs.
+
+**Commercial DRM callback** — `POST /drm/authorize { token }` → `{ data: { allowed: true, user_id, asset_id, kid } }` for license services that validate the `x-thumbz-playback` header server-to-server.
+
+Live streams are not DRM-protected (that needs a live packager); DRM applies to VOD/replays.
+

@@ -133,8 +133,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const unavailable: number = HttpStatus.SERVICE_UNAVAILABLE;
+      const conflict: number = HttpStatus.CONFLICT;
       if (status >= 500 && status !== unavailable) {
         return this.internalError(exception);
+      }
+      // Conflicts thrown with an explicit, user-facing reason keep it
+      // (e.g. the concurrent-stream limit); everything else stays generic.
+      const reason = (exception.getResponse() as { message?: unknown })
+        ?.message;
+      if (
+        status === conflict &&
+        typeof reason === 'string' &&
+        reason !== 'Conflict'
+      ) {
+        return errorFor(status, { message: reason });
       }
       return errorFor(status);
     }

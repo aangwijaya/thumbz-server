@@ -34,6 +34,18 @@ export interface AppConfig {
   paymentsSandbox: boolean;
   /** HMAC key for ticket QR payloads (dev default outside production). */
   ticketSigningSecret: string;
+  /** 32-byte AES-256-GCM key wrapping content keys (dev default outside production). */
+  drmMasterKey: string;
+  /** HS256 secret for short-lived playback tokens (dev default outside production). */
+  playbackTokenSecret: string;
+  maxStreamsPerUser: number;
+  /** Commercial DRM license endpoints (multidrm assets); null = not offered. */
+  drmLicenseUrls: {
+    widevine: string | null;
+    playready: string | null;
+    fairplay: string | null;
+    fairplayCertificate: string | null;
+  };
   nowpaymentsApiKey: string | null;
   nowpaymentsIpnSecret: string | null;
   nowpaymentsApiBase: string;
@@ -126,6 +138,27 @@ const envSchema = z
         .string()
         .min(32, 'TICKET_SIGNING_SECRET must be at least 32 characters'),
     ),
+    DRM_MASTER_KEY: optional(
+      z
+        .string()
+        .regex(
+          /^[0-9a-f]{64}$/i,
+          'DRM_MASTER_KEY must be 64 hex chars (32 bytes)',
+        ),
+    ),
+    PLAYBACK_TOKEN_SECRET: optional(
+      z
+        .string()
+        .min(32, 'PLAYBACK_TOKEN_SECRET must be at least 32 characters'),
+    ),
+    MAX_STREAMS_PER_USER: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(1).max(10).optional(),
+    ),
+    DRM_WIDEVINE_LICENSE_URL: optional(httpUrl),
+    DRM_PLAYREADY_LICENSE_URL: optional(httpUrl),
+    DRM_FAIRPLAY_LICENSE_URL: optional(httpUrl),
+    DRM_FAIRPLAY_CERT_URL: optional(httpUrl),
     NOWPAYMENTS_API_KEY: optional(z.string().trim()),
     NOWPAYMENTS_IPN_SECRET: optional(z.string().trim()),
     NOWPAYMENTS_API_BASE: optional(httpUrl),
@@ -155,6 +188,8 @@ const envSchema = z
       'FRONTEND_URL',
       'REDIS_URL',
       'TICKET_SIGNING_SECRET',
+      'DRM_MASTER_KEY',
+      'PLAYBACK_TOKEN_SECRET',
     ] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({
@@ -217,6 +252,17 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ticketSigningSecret:
       parsed.TICKET_SIGNING_SECRET ??
       'dev-only-ticket-signing-secret-change-me',
+    drmMasterKey: parsed.DRM_MASTER_KEY ?? '0'.repeat(63) + '1',
+    playbackTokenSecret:
+      parsed.PLAYBACK_TOKEN_SECRET ??
+      'dev-only-playback-token-secret-change-me',
+    maxStreamsPerUser: parsed.MAX_STREAMS_PER_USER ?? 2,
+    drmLicenseUrls: {
+      widevine: parsed.DRM_WIDEVINE_LICENSE_URL ?? null,
+      playready: parsed.DRM_PLAYREADY_LICENSE_URL ?? null,
+      fairplay: parsed.DRM_FAIRPLAY_LICENSE_URL ?? null,
+      fairplayCertificate: parsed.DRM_FAIRPLAY_CERT_URL ?? null,
+    },
     nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
     nowpaymentsApiBase:

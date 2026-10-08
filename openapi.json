@@ -1913,6 +1913,30 @@
         ]
       }
     },
+    "/api/v1/videos/{id}": {
+      "get": {
+        "operationId": "Videos_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "operationId": "Search_search",
@@ -3391,6 +3415,171 @@
         ]
       }
     },
+    "/api/v1/playback/sessions": {
+      "post": {
+        "operationId": "Playback_createSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Signed-in viewers open a session for a protected asset.",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/playback/sessions/{sid}/heartbeat": {
+      "post": {
+        "operationId": "Playback_heartbeat",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/playback/sessions/{sid}": {
+      "delete": {
+        "operationId": "Playback_end",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/drm/clearkey/license": {
+      "post": {
+        "operationId": "Playback_license",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "EME ClearKey license; the playback token travels as a Bearer header.",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/playback/{sid}/hls/master.m3u8": {
+      "get": {
+        "operationId": "Playback_hlsMaster",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Safari's native player cannot send headers, so HLS URLs carry the token.",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/playback/{sid}/hls/variant": {
+      "get": {
+        "operationId": "Playback_hlsVariant",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/drm/hls/key": {
+      "get": {
+        "operationId": "Playback_hlsKey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/drm/authorize": {
+      "post": {
+        "operationId": "Playback_authorize",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Callback for commercial DRM license services (token in the body).",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
     "/api/v1/admin/jobs": {
       "get": {
         "operationId": "Jobs_overview",
@@ -4556,6 +4745,14 @@
         "required": [
           "body"
         ]
+      },
+      "CreateSessionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TokenQuery": {
+        "type": "object",
+        "properties": {}
       }
     }
   }

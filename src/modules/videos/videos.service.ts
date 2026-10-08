@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { findPage, ListMeta } from '../../common/utils/find-page';
 import { PrismaService } from '../../prisma/prisma.service';
+import { orNotFound } from '../../common/utils/not-found';
 import { ListVideosDto } from './dto/list-videos.dto';
 
 export const VIDEO_WINNER_SELECT = {
@@ -18,6 +19,7 @@ export const VIDEO_WINNER_SELECT = {
 
 export const VIDEO_INCLUDE = {
   winningTeam: { select: VIDEO_WINNER_SELECT },
+  media: { select: { id: true, protection: true, duration_seconds: true } },
 } satisfies Prisma.VideoInclude;
 
 export type VideoRow = Prisma.VideoGetPayload<{
@@ -37,6 +39,8 @@ export interface VideoSummary {
     game_number: number | null;
     winner_team: VideoRow['winningTeam'];
   } | null;
+  /** Protected in-app playback (playback session required), when packaged. */
+  media: { id: string; protection: string } | null;
 }
 
 export function toVideoSummary(row: VideoRow): VideoSummary {
@@ -53,12 +57,25 @@ export function toVideoSummary(row: VideoRow): VideoSummary {
       row.winning_team_id !== null
         ? { game_number: row.game_number, winner_team: row.winningTeam }
         : null,
+    media: row.media
+      ? { id: row.media.id, protection: row.media.protection }
+      : null,
   };
 }
 
 @Injectable()
 export class VideosService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async get(id: string): Promise<{ data: VideoSummary }> {
+    const row = orNotFound(
+      await this.prisma.video.findUnique({
+        where: { id },
+        include: VIDEO_INCLUDE,
+      }),
+    );
+    return { data: toVideoSummary(row) };
+  }
 
   async list(
     query: ListVideosDto,

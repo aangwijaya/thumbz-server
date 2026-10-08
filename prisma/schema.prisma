@@ -287,6 +287,8 @@ model Video {
 
   search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
 
+  media MediaAsset?
+
   @@index([type, published_at(sort: Desc)])
   @@index([match_id])
   @@index([winning_team_id])
@@ -452,6 +454,12 @@ enum ticket_order_status {
   refund_required
 }
 
+enum media_protection {
+  none
+  clearkey_aes
+  multidrm
+}
+
 enum payment_provider {
   nowpayments
   xendit
@@ -598,4 +606,42 @@ model PaymentEvent {
   @@unique([provider, event_key])
   @@index([processed_at])
   @@map("payment_events")
+}
+
+/// A packaged (optionally encrypted) stream: DASH for MSE/EME browsers, HLS
+/// for Safari/iOS. Segments live on the CDN; access is gated by the keys.
+model MediaAsset {
+  id                  String           @id @default(uuid()) @db.Uuid
+  video_id            String?          @unique @db.Uuid
+  title               String
+  protection          media_protection @default(clearkey_aes)
+  /// Absolute CDN URLs of the manifests.
+  dash_url            String?
+  hls_url             String?
+  /// Content key id (32 hex chars) when encrypted.
+  kid                 String?
+  /// Content id registered with a commercial DRM provider, if any.
+  provider_content_id String?
+  duration_seconds    Int?
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+
+  video Video?      @relation(fields: [video_id], references: [id], onDelete: SetNull)
+  key   ContentKey? @relation(fields: [kid], references: [kid])
+
+  @@map("media_assets")
+}
+
+/// Content encryption keys, stored encrypted (AES-256-GCM envelope with
+/// DRM_MASTER_KEY); plaintext keys never touch the database.
+model ContentKey {
+  kid        String   @id
+  ciphertext String
+  iv         String
+  auth_tag   String
+  created_at DateTime @default(now())
+
+  assets MediaAsset[]
+
+  @@map("content_keys")
 }
