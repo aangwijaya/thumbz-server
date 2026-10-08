@@ -252,7 +252,8 @@ async function createBroadcasts(
     data: feeds.map((feed) => ({
       match_id: match.id,
       language: feed.language,
-      stream_url: `https://cdn.example.com/streams/${feed.language}-${match.id.slice(0, 8)}.m3u8`,
+      // Every feed plays the public test stream (example.com never resolves).
+      stream_url: SEED_STREAM_URL,
       viewer_count: feed.viewer_count,
     })),
   });
