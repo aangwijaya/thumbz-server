@@ -94,6 +94,8 @@ describe('configuration', () => {
       metricsToken: null,
       redisUrl: null,
       cacheNamespace: 'thumbz',
+      liveSimulator: false,
+      liveSimulatorIntervalMs: 5_000,
       revalidateSecret: null,
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,

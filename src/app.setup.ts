@@ -5,6 +5,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { createValidationPipe } from './common/pipes/validation.pipe';
 import { REQUEST_ID_HEADER } from './infra/logging/request-id';
 import { MetricsService } from './infra/metrics/metrics.service';
+import { RealtimeIoAdapter } from './modules/realtime/realtime-io.adapter';
 
 /** Routes served outside `/api/v1` (probes and scrapes, see contract §1). */
 export const UNVERSIONED_ROUTES = [
@@ -34,4 +35,5 @@ export function configureApp(app: INestApplication): void {
   });
   app.useGlobalPipes(createValidationPipe());
   app.useGlobalFilters(new HttpExceptionFilter());
+  app.useWebSocketAdapter(new RealtimeIoAdapter(app));
 }

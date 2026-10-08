@@ -1525,9 +1525,44 @@ The Next.js client MUST:
 - `standings`, `current_form`, `per_hero`, `per_tournament`, `related` and the `home` payload are computed read models — no dedicated tables.
 - `match_gold_snapshots`, `player_match_snapshots`, `match_item_events` and `match_events` ARE stored tables (append-only live data for the streaming page: economy chart, live rankings, equipment timeline, events feed). Current totals remain in the statistics tables.
 - `match_broadcasts` IS a stored table (replace-only): language broadcast variants (`en | id | ms | tl`) of a live match, unique per `(match_id, language)`, ordered for clients by `viewer_count` desc. `matches.viewer_count` stays the aggregate ranking number; per-variant counts are informational.
-- `match_comments` IS a stored table (append-only): live comments per match with a server-snapshotted `author_name`; deleted rows are gone for good (no soft delete, no edit). `GET /matches/:id/comments` uses `after` + `next_cursor` for lightweight delta polling — there is no websocket/SSE transport by design.
+- `match_comments` IS a stored table (append-only): live comments per match with a server-snapshotted `author_name`; deleted rows are gone for good (no soft delete, no edit). `GET /matches/:id/comments` uses opaque cursors (`after` for deltas, `before` for history); new comments are also pushed over the realtime channel (§14).
 - `tournaments.current_stage` is computed (never stored): live stage → earliest scheduled stage → latest completed stage.
 - Video per-game results live on `videos.game_number` + `videos.winning_team_id` (nullable, admin-set); `stream_delay_seconds` lives on `matches` (default 30); `teams.short_name` and `watch_history.total_seconds` are nullable client/admin-provided conveniences.
 - Ticketing IS stored: `match_ticket_configs` (one per match: venue, price USD, quota, sales window), `ticket_orders` (crypto checkout state, 30-minute holds), `tickets` (one row per ticket with a unique code/QR payload). Payments run through NOWPayments hosted invoices with merchant-side auto-conversion to USDT; there is no websocket/polling transport beyond `GET /me/orders/:id`.
 - Match statistics `details` (JSONB) exists because Mobile Legends stats shape varies per game/patch; do not model per-hero columns relationally in MVP.
 - The server may return extra fields added later; clients must ignore unknown fields (forward compatibility).
+
+---
+
+## 14. Realtime channel (WebSocket)
+
+Socket.IO v4, namespace **`/rt`** on the API host (path `/socket.io`). Transports: WebSocket, with HTTP long-polling fallback for restrictive networks. Same CORS allowlist as the REST API. Writes always go through REST; the socket only pushes.
+
+**Connect:** `io("<api-origin>/rt", { auth: { token: "<supabase access token>" } })`. The token is optional: anonymous clients may join public rooms. A valid token additionally joins the private room `user:<sub>`; an invalid one keeps the connection anonymous and emits `auth:error`.
+
+**Client → server (with acknowledgement):**
+
+| Event | Body | Ack |
+| --- | --- | --- |
+| `subscribe` | `{ "room": "match:<uuid>" \| "live" }` | `{ ok: true, room, seq }` (current seq = gap-detection baseline) or `{ ok: false, error: "invalid_room" \| "too_many_rooms" \| "rate_limited" }` |
+| `unsubscribe` | `{ "room": … }` | same shape |
+| `presence:ping` | — | none; send every ~30 s while a match page is visible |
+
+Limits: 5 rooms per socket; more than 30 messages per 10 s disconnects the socket.
+
+**Server → client.** Every message except viewer counts is an envelope `{ room, seq, data }` where `seq` increases by exactly 1 per room. A jump means messages were missed (e.g. during a reconnect): resync the affected resources over REST.
+
+| Event | Room | `data` | Client action |
+| --- | --- | --- | --- |
+| `match:update` | `match:<id>` | `{ id, status, score_a, score_b, winner_team_id, viewer_count, started_at, ended_at }` | apply to the match in place |
+| `match:live` | `match:<id>` | `{ kind: "economy" \| "live-stats" \| "equipment" \| "events" \| "broadcasts" }` | refetch that sub-resource (notify-then-fetch: the API caches these 3 s with single flight, so N viewers cause one query) |
+| `comment:new` | `match:<id>` | `MatchComment` | append to chat |
+| `comment:deleted` | `match:<id>` | `{ id }` | remove from chat |
+| `tickets:changed` | `match:<id>` | `{ match_id }` | refetch `GET /matches/:id/ticket` |
+| `live:changed` | `live` | `{ match_id, status }` | refresh live lists |
+| `match:viewers` | `match:<id>` | `{ online }` (no seq) | "N watching on THUMBZ", every 15 s |
+| `order:update` | `user:<sub>` | see §6 tickets | refetch the order (payments phase) |
+
+Polling (§11) remains the fallback while the socket is disconnected; clients stop polling once connected and subscribed.
+
+**Demo:** with `LIVE_SIMULATOR=true` the API keeps seeded live matches "playing" (gold, kills, objectives, item buys, viewer drift) through the regular ingestion services, so every layer — cache invalidation, domain events, realtime fan-out — runs as in production.

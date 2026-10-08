@@ -29,5 +29,6 @@ import { AdminVideosService } from './admin-videos.service';
     AdminPlayersService,
     AdminVideosService,
   ],
+  exports: [AdminMatchesService, AdminService],
 })
 export class AdminModule {}

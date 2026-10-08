@@ -23,11 +23,8 @@ export type DomainEvent =
       id: string;
     }
   | { type: 'tickets.changed'; matchId: string }
-  | {
-      type: 'comment.created' | 'comment.deleted';
-      matchId: string;
-      commentId: string;
-    };
+  | { type: 'comment.created'; matchId: string; commentId: string }
+  | { type: 'comment.deleted'; matchId: string; commentId: string };
 
 export type DomainEventType = DomainEvent['type'];
 

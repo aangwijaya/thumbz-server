@@ -25,6 +25,8 @@ import { HistoryModule } from './modules/history/history.module';
 import { HomeModule } from './modules/home/home.module';
 import { MatchesModule } from './modules/matches/matches.module';
 import { PlayersModule } from './modules/players/players.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
+import { SimulatorModule } from './modules/simulator/simulator.module';
 import { SearchModule } from './modules/search/search.module';
 import { TeamsModule } from './modules/teams/teams.module';
 import { TournamentsModule } from './modules/tournaments/tournaments.module';
@@ -63,6 +65,8 @@ import { PrismaModule } from './prisma/prisma.module';
     AdminModule,
     CommentsModule,
     TicketsModule,
+    RealtimeModule,
+    SimulatorModule,
     ThrottlerModule.forRootAsync({
       inject: [REDIS],
       // Shared counters across instances when Redis is available.

@@ -22,6 +22,9 @@ export interface AppConfig {
   redisUrl: string | null;
   /** Prefix for cache keys in Redis (default "thumbz"). */
   cacheNamespace: string;
+  /** Demo mode: seeded live matches keep "playing" (see LiveSimulatorService). */
+  liveSimulator: boolean;
+  liveSimulatorIntervalMs: number;
   /** Shared secret for POST {frontendUrl}/api/revalidate; null disables it. */
   revalidateSecret: string | null;
   nowpaymentsApiKey: string | null;
@@ -99,6 +102,11 @@ const envSchema = z
         .string()
         .regex(/^[a-z0-9:_-]{1,60}$/i, 'CACHE_NAMESPACE must be [a-z0-9:_-]'),
     ),
+    LIVE_SIMULATOR: optional(z.enum(['true', 'false', '1', '0'])),
+    LIVE_SIMULATOR_INTERVAL_MS: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(1_000).max(60_000).optional(),
+    ),
     REVALIDATE_SECRET: optional(
       z.string().min(16, 'REVALIDATE_SECRET must be at least 16 characters'),
     ),
@@ -168,6 +176,8 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     metricsToken: parsed.METRICS_TOKEN ?? null,
     redisUrl: parsed.REDIS_URL ?? null,
     cacheNamespace: parsed.CACHE_NAMESPACE ?? 'thumbz',
+    liveSimulator: ['true', '1'].includes(parsed.LIVE_SIMULATOR ?? ''),
+    liveSimulatorIntervalMs: parsed.LIVE_SIMULATOR_INTERVAL_MS ?? 5_000,
     revalidateSecret: parsed.REVALIDATE_SECRET ?? null,
     nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
