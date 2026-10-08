@@ -725,8 +725,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "scheduled",
                 "live",
+                "scheduled",
                 "completed",
                 "cancelled",
                 "postponed"
@@ -1043,8 +1043,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "scheduled",
                 "live",
+                "scheduled",
                 "completed",
                 "cancelled",
                 "postponed"
@@ -1228,8 +1228,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "scheduled",
                 "live",
+                "scheduled",
                 "completed",
                 "cancelled",
                 "postponed"
@@ -1327,8 +1327,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "scheduled",
                 "live",
+                "scheduled",
                 "completed",
                 "cancelled",
                 "postponed"
@@ -3319,8 +3319,8 @@
           "status": {
             "type": "string",
             "enum": [
-              "scheduled",
               "live",
+              "scheduled",
               "completed",
               "cancelled",
               "postponed"
@@ -3428,8 +3428,8 @@
           "status": {
             "type": "string",
             "enum": [
-              "scheduled",
               "live",
+              "scheduled",
               "completed",
               "cancelled",
               "postponed"

@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { AdminTournamentsService } from './admin-tournaments.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -22,7 +23,7 @@ describe('AdminTournamentsService (integration, local Postgres)', () => {
 
   beforeAll(() => {
     prisma = new PrismaService();
-    adminTournaments = new AdminTournamentsService(prisma);
+    adminTournaments = new AdminTournamentsService(prisma, testEvents());
   });
 
   afterAll(async () => {

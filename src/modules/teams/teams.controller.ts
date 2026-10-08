@@ -13,6 +13,8 @@ import {
   TeamSummary,
   TeamsService,
 } from './teams.service';
+import { Cached } from '../../infra/cache/cached.decorator';
+import { CacheTags } from '../../infra/cache/cache-tags';
 
 @ApiTags('teams')
 @Controller('teams')
@@ -20,6 +22,7 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get()
   list(
     @Query() query: ListTeamsDto,
@@ -28,6 +31,10 @@ export class TeamsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 60,
+    tags: ({ id }) => [CacheTags.team(id), CacheTags.catalog],
+  })
   @Get(':id/statistics')
   statistics(
     @Param() params: TeamIdParamsDto,
@@ -36,12 +43,20 @@ export class TeamsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 60,
+    tags: ({ id }) => [CacheTags.team(id), CacheTags.catalog],
+  })
   @Get(':id/roster')
   roster(@Param() params: TeamIdParamsDto): Promise<{ data: RosterPlayer[] }> {
     return this.teamsService.roster(params.id);
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.team(id), CacheTags.catalog],
+  })
   @Get(':id/matches')
   teamMatches(
     @Param() params: TeamIdParamsDto,
@@ -51,6 +66,10 @@ export class TeamsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.team(id), CacheTags.catalog],
+  })
   @Get(':id')
   get(@Param() params: TeamIdParamsDto): Promise<{ data: TeamDetail }> {
     return this.teamsService.get(params.id);

@@ -4,6 +4,7 @@ import { BusinessRuleException } from '../../common/errors/business-rule.excepti
 import { PrismaService } from '../../prisma/prisma.service';
 import { NowPaymentsClient } from './nowpayments.client';
 import { TicketsService } from './tickets.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -38,11 +39,13 @@ describe('TicketsService (integration, local Postgres)', () => {
     };
     const config = new ConfigService({
       corsOrigins: ['http://localhost:3000'],
+      frontendUrl: 'http://localhost:3000',
     });
     tickets = new TicketsService(
       prisma,
       provider as unknown as NowPaymentsClient,
       config,
+      testEvents(),
     );
 
     await prisma.ticket.deleteMany({

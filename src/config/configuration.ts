@@ -20,6 +20,8 @@ export interface AppConfig {
   /** When set, GET /metrics requires `Authorization: Bearer <token>`. */
   metricsToken: string | null;
   redisUrl: string | null;
+  /** Shared secret for POST {frontendUrl}/api/revalidate; null disables it. */
+  revalidateSecret: string | null;
   nowpaymentsApiKey: string | null;
   nowpaymentsIpnSecret: string | null;
   nowpaymentsApiBase: string;
@@ -90,6 +92,9 @@ const envSchema = z
     REDIS_URL: optional(
       z.string().regex(/^rediss?:\/\//, 'REDIS_URL must be a redis:// URL'),
     ),
+    REVALIDATE_SECRET: optional(
+      z.string().min(16, 'REVALIDATE_SECRET must be at least 16 characters'),
+    ),
     NOWPAYMENTS_API_KEY: optional(z.string().trim()),
     NOWPAYMENTS_IPN_SECRET: optional(z.string().trim()),
     NOWPAYMENTS_API_BASE: optional(httpUrl),
@@ -99,8 +104,12 @@ const envSchema = z
       return;
     }
     // Without these, payment callbacks and return URLs would silently point
-    // at localhost in production.
-    for (const key of ['PUBLIC_API_URL', 'FRONTEND_URL'] as const) {
+    // at localhost, and rate limits/caches would be per-instance.
+    for (const key of [
+      'PUBLIC_API_URL',
+      'FRONTEND_URL',
+      'REDIS_URL',
+    ] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({
           code: 'custom',
@@ -151,6 +160,7 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: parsed.LOG_LEVEL ?? 'info',
     metricsToken: parsed.METRICS_TOKEN ?? null,
     redisUrl: parsed.REDIS_URL ?? null,
+    revalidateSecret: parsed.REVALIDATE_SECRET ?? null,
     nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
     nowpaymentsApiBase:

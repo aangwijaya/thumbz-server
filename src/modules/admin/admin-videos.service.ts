@@ -9,10 +9,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminVideosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async create(dto: CreateVideoDto): Promise<{ data: VideoSummary }> {
     await this.ensureMatchExists(dto.match_id);
@@ -37,6 +41,7 @@ export class AdminVideosService {
       include: VIDEO_INCLUDE,
     });
 
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id: row.id });
     return { data: toVideoSummary(row) };
   }
 
@@ -90,6 +95,7 @@ export class AdminVideosService {
       include: VIDEO_INCLUDE,
     });
 
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id: row.id });
     return { data: toVideoSummary(row) };
   }
 
@@ -102,6 +108,7 @@ export class AdminVideosService {
     );
 
     await this.prisma.video.delete({ where: { id } });
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id });
   }
 
   private async ensureResultValid(

@@ -9,10 +9,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlayerDto } from './dto/create-player.dto';
 import { UpdatePlayerDto } from './dto/update-player.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminPlayersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async create(dto: CreatePlayerDto): Promise<{ data: PlayerSummary }> {
     await this.ensureTeamExists(dto.team_id);
@@ -30,7 +34,7 @@ export class AdminPlayersService {
       },
     });
 
-    return this.getSummary(dto.slug, 'slug');
+    return this.publish(await this.getSummary(dto.slug, 'slug'));
   }
 
   async update(
@@ -59,7 +63,7 @@ export class AdminPlayersService {
       },
     });
 
-    return this.getSummary(id, 'id');
+    return this.publish(await this.getSummary(id, 'id'));
   }
 
   async remove(id: string): Promise<void> {
@@ -80,6 +84,7 @@ export class AdminPlayersService {
     }
 
     await this.prisma.player.delete({ where: { id } });
+    this.events.emit({ type: 'catalog.changed', entity: 'player', id });
   }
 
   private async ensureTeamExists(
@@ -94,6 +99,15 @@ export class AdminPlayersService {
         select: { id: true },
       }),
     );
+  }
+
+  private publish(result: { data: PlayerSummary }): { data: PlayerSummary } {
+    this.events.emit({
+      type: 'catalog.changed',
+      entity: 'player',
+      id: result.data.id,
+    });
+    return result;
   }
 
   private async getSummary(

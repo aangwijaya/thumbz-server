@@ -6,6 +6,7 @@ import {
   HealthCheckService,
 } from '@nestjs/terminus';
 import { Public } from '../../common/decorators/public.decorator';
+import { RedisHealthIndicator } from '../../infra/redis/redis.health';
 import { DatabaseHealthIndicator } from './database.health';
 
 @ApiTags('health')
@@ -15,6 +16,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly database: DatabaseHealthIndicator,
+    private readonly redis: RedisHealthIndicator,
   ) {}
 
   /** Contract §1 probe (used by the Railway health check): readiness, minimal body. */
@@ -39,6 +41,9 @@ export class HealthController {
   }
 
   private readiness(): Promise<HealthCheckResult> {
-    return this.health.check([() => this.database.pingCheck('database')]);
+    return this.health.check([
+      () => this.database.pingCheck('database'),
+      () => this.redis.pingCheck('redis'),
+    ]);
   }
 }

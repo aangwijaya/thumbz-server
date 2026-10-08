@@ -3,6 +3,7 @@ import { ThrottlerException } from '@nestjs/throttler';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { CommentsService } from './comments.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -22,7 +23,7 @@ describe('CommentsService (integration, local Postgres)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaService();
-    comments = new CommentsService(prisma);
+    comments = new CommentsService(prisma, testEvents(), null);
 
     await prisma.matchComment.deleteMany({
       where: { user_id: { in: [USER_ID, OTHER_USER_ID] } },

@@ -3,6 +3,7 @@ import { BusinessRuleException } from '../../common/errors/business-rule.excepti
 import { AdminMatchesService } from './admin-matches.service';
 import { MatchesService } from '../matches/matches.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -21,7 +22,11 @@ describe('AdminMatchesService live + statistics (integration, local Postgres)', 
 
   beforeAll(async () => {
     prisma = new PrismaService();
-    adminMatches = new AdminMatchesService(prisma, new MatchesService(prisma));
+    adminMatches = new AdminMatchesService(
+      prisma,
+      new MatchesService(prisma),
+      testEvents(),
+    );
 
     const oldTeams = await prisma.team.findMany({
       where: { slug: { in: ['e2e-adminls-a', 'e2e-adminls-b'] } },

@@ -12,6 +12,8 @@ import {
   TournamentSummary,
   TournamentsService,
 } from './tournaments.service';
+import { Cached } from '../../infra/cache/cached.decorator';
+import { CacheTags } from '../../infra/cache/cache-tags';
 
 @ApiTags('tournaments')
 @Controller('tournaments')
@@ -19,6 +21,7 @@ export class TournamentsController {
   constructor(private readonly tournamentsService: TournamentsService) {}
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get()
   list(
     @Query() query: ListTournamentsDto,
@@ -27,6 +30,10 @@ export class TournamentsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.tournament(id), CacheTags.catalog],
+  })
   @Get(':id/schedule')
   schedule(
     @Param() params: TournamentIdParamsDto,
@@ -39,6 +46,10 @@ export class TournamentsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.tournament(id), CacheTags.catalog],
+  })
   @Get(':id/standings')
   standings(@Param() params: TournamentIdParamsDto): Promise<{
     data: { tournament_id: string; standings: Array<Record<string, unknown>> };
@@ -47,6 +58,10 @@ export class TournamentsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.tournament(id), CacheTags.catalog],
+  })
   @Get(':id/results')
   results(
     @Param() params: TournamentIdParamsDto,
@@ -60,6 +75,10 @@ export class TournamentsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.tournament(id), CacheTags.catalog],
+  })
   @Get(':id/stages')
   stages(@Param() params: TournamentIdParamsDto): Promise<{
     data: Array<{
@@ -73,6 +92,10 @@ export class TournamentsController {
   }
 
   @Public()
+  @Cached({
+    ttl: 30,
+    tags: ({ id }) => [CacheTags.tournament(id), CacheTags.catalog],
+  })
   @Get(':id')
   get(
     @Param() params: TournamentIdParamsDto,

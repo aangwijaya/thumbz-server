@@ -29,6 +29,7 @@ import {
   prismaErrorCode,
 } from '../../common/errors/prisma-errors';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 const HOLD_MINUTES = 30;
 const MAX_PER_USER_PER_MATCH = 4;
@@ -108,6 +109,7 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly provider: NowPaymentsClient,
     private readonly config: ConfigService,
+    private readonly events: DomainEvents,
   ) {}
 
   async availability(
@@ -295,6 +297,9 @@ export class TicketsService {
       });
     });
 
+    // The hold reduces availability immediately.
+    this.events.emit({ type: 'tickets.changed', matchId });
+
     const feBase =
       this.config.get<string>('frontendUrl') ?? 'http://localhost:3000';
     const apiBase =
@@ -365,7 +370,7 @@ export class TicketsService {
     const row = orNotFound(
       await this.prisma.ticketOrder.findFirst({
         where: { id, user_id: user.sub },
-        select: { id: true, status: true },
+        select: { id: true, status: true, match_id: true },
       }),
     );
     if (row.status === 'paid') {
@@ -373,10 +378,13 @@ export class TicketsService {
         'paid orders cannot be cancelled; crypto payments are not refunded automatically',
       );
     }
-    await this.prisma.ticketOrder.updateMany({
+    const cancelled = await this.prisma.ticketOrder.updateMany({
       where: { id, user_id: user.sub, status: 'pending' },
       data: { status: 'cancelled' },
     });
+    if (cancelled.count > 0) {
+      this.events.emit({ type: 'tickets.changed', matchId: row.match_id });
+    }
   }
 
   async listTickets(
@@ -442,6 +450,7 @@ export class TicketsService {
       update: data,
     });
 
+    this.events.emit({ type: 'tickets.changed', matchId });
     const remaining = await this.remainingQuota(matchId, config.quota_total);
     return {
       data: {
@@ -562,7 +571,7 @@ export class TicketsService {
           order.quantity,
         );
       }
-      return { ok: true };
+      return this.acknowledge(order.match_id);
     }
 
     if (paymentStatus === 'failed' || paymentStatus === 'refunded') {
@@ -582,7 +591,7 @@ export class TicketsService {
           });
         }
       }
-      return { ok: true };
+      return this.acknowledge(order.match_id);
     }
 
     if (paymentStatus === 'expired') {
@@ -592,6 +601,12 @@ export class TicketsService {
       });
     }
 
+    return this.acknowledge(order.match_id);
+  }
+
+  /** Availability changed for the match: tell caches and listeners. */
+  private acknowledge(matchId: string): { ok: true } {
+    this.events.emit({ type: 'tickets.changed', matchId });
     return { ok: true };
   }
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,6 +6,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ListCommentsDto } from './dto/list-comments.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
+import { REDIS } from '../../infra/redis/redis.constants';
+import type { Redis } from 'ioredis';
 
 export interface MatchComment {
   id: string;
@@ -29,7 +32,11 @@ const COMMENT_COOLDOWN_MS = 3_000;
 
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+    @Inject(REDIS) private readonly redis: Redis | null,
+  ) {}
 
   async list(
     matchId: string,
@@ -83,15 +90,7 @@ export class CommentsService {
       );
     }
 
-    const last = await this.prisma.matchComment.findFirst({
-      where: { user_id: user.sub },
-      orderBy: { created_at: 'desc' },
-      select: { created_at: true },
-    });
-    if (
-      last !== null &&
-      Date.now() - last.created_at.getTime() < COMMENT_COOLDOWN_MS
-    ) {
+    if (!(await this.claimCooldown(user.sub))) {
       throw new ThrottlerException();
     }
 
@@ -111,30 +110,77 @@ export class CommentsService {
       select: COMMENT_SELECT,
     });
 
+    this.events.emit({
+      type: 'comment.created',
+      matchId: row.match_id,
+      commentId: row.id,
+    });
     return { data: { ...row } };
   }
 
   async removeOwn(userId: string, id: string): Promise<void> {
-    const deleted = await this.prisma.matchComment.deleteMany({
-      where: { id, user_id: userId },
-    });
-    if (deleted.count > 0) {
-      return;
-    }
-
     const existing = await this.prisma.matchComment.findUnique({
       where: { id },
-      select: { user_id: true },
+      select: { user_id: true, match_id: true },
     });
-    if (existing !== null) {
+    if (existing === null) {
+      return; // already gone (or never existed): idempotent
+    }
+    if (existing.user_id !== userId) {
       // someone else's comment: do not leak its existence
       throw new NotFoundException();
     }
-    // already gone (or never existed): idempotent
+    await this.deleteComment(id, existing.match_id);
   }
 
   async removeAny(id: string): Promise<void> {
-    await this.prisma.matchComment.deleteMany({ where: { id } });
+    const existing = await this.prisma.matchComment.findUnique({
+      where: { id },
+      select: { match_id: true },
+    });
+    if (existing !== null) {
+      await this.deleteComment(id, existing.match_id);
+    }
+  }
+
+  private async deleteComment(id: string, matchId: string): Promise<void> {
+    const deleted = await this.prisma.matchComment.deleteMany({
+      where: { id },
+    });
+    if (deleted.count > 0) {
+      this.events.emit({ type: 'comment.deleted', matchId, commentId: id });
+    }
+  }
+
+  /**
+   * One comment per user per cooldown window. With Redis this is a single
+   * atomic SET NX (no race between concurrent posts); without it, fall back
+   * to checking the user's latest comment.
+   */
+  private async claimCooldown(userId: string): Promise<boolean> {
+    if (this.redis !== null && this.redis.status === 'ready') {
+      try {
+        const claimed = await this.redis.set(
+          `thumbz:cooldown:comment:${userId}`,
+          '1',
+          'PX',
+          COMMENT_COOLDOWN_MS,
+          'NX',
+        );
+        return claimed === 'OK';
+      } catch {
+        // fall through to the database check
+      }
+    }
+    const last = await this.prisma.matchComment.findFirst({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      select: { created_at: true },
+    });
+    return (
+      last === null ||
+      Date.now() - last.created_at.getTime() >= COMMENT_COOLDOWN_MS
+    );
   }
 
   private async requireMatch(matchId: string): Promise<void> {

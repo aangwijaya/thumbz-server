@@ -30,6 +30,8 @@ import {
   TicketOrderView,
   TicketsService,
 } from './tickets.service';
+import { Cached } from '../../infra/cache/cached.decorator';
+import { CacheTags } from '../../infra/cache/cache-tags';
 
 type RawBodyRequest = Request & { rawBody?: Buffer };
 
@@ -39,6 +41,7 @@ export class MatchTicketsController {
   constructor(private readonly tickets: TicketsService) {}
 
   @Public()
+  @Cached({ ttl: 5, tags: ({ id }) => [CacheTags.tickets(id)] })
   @Get(':id/ticket')
   availability(
     @Param() params: MatchIdParamsDto,

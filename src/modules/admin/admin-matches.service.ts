@@ -19,12 +19,14 @@ import { BroadcastDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 import { validateCompletedMatch, validateTransition } from './match-state';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminMatchesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly matchesService: MatchesService,
+    private readonly events: DomainEvents,
   ) {}
 
   async create(dto: CreateMatchDto): Promise<{ data: MatchDetail }> {
@@ -77,7 +79,7 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(row.id);
+    return this.publishChanged(await this.getDetail(row.id));
   }
 
   async update(
@@ -179,19 +181,25 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(id);
+    return this.publishChanged(await this.getDetail(id));
   }
 
   async remove(id: string): Promise<void> {
-    orNotFound(
+    const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id },
-        select: { id: true },
+        select: { tournament_id: true, team_a_id: true, team_b_id: true },
       }),
     );
 
     // statistics rows cascade via the FK (ON DELETE CASCADE)
     await this.prisma.match.delete({ where: { id } });
+    this.events.emit({
+      type: 'match.changed',
+      matchId: id,
+      tournamentId: match.tournament_id,
+      teamIds: [match.team_a_id, match.team_b_id],
+    });
   }
 
   private async ensureTeamsExist(
@@ -218,6 +226,31 @@ export class AdminMatchesService {
         select: { id: true },
       }),
     );
+  }
+
+  private publishChanged(detail: { data: MatchDetail }): { data: MatchDetail } {
+    this.events.emit({
+      type: 'match.changed',
+      matchId: detail.data.id,
+      tournamentId: detail.data.tournament?.id ?? null,
+      teamIds: [detail.data.team_a.id, detail.data.team_b.id],
+    });
+    return detail;
+  }
+
+  private async publishChangedById(id: string): Promise<void> {
+    const match = await this.prisma.match.findUnique({
+      where: { id },
+      select: { tournament_id: true, team_a_id: true, team_b_id: true },
+    });
+    if (match !== null) {
+      this.events.emit({
+        type: 'match.changed',
+        matchId: id,
+        tournamentId: match.tournament_id,
+        teamIds: [match.team_a_id, match.team_b_id],
+      });
+    }
   }
 
   private async getDetail(id: string): Promise<{ data: MatchDetail }> {
@@ -296,7 +329,7 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(id);
+    return this.publishChanged(await this.getDetail(id));
   }
 
   async upsertStatistics(
@@ -386,7 +419,9 @@ export class AdminMatchesService {
       }
     });
 
-    return this.matchesService.statistics(id);
+    const statistics = await this.matchesService.statistics(id);
+    await this.publishChangedById(id);
+    return statistics;
   }
 
   async upsertLiveStats(
@@ -464,6 +499,11 @@ export class AdminMatchesService {
       },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'live-stats',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -537,6 +577,11 @@ export class AdminMatchesService {
       },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'equipment',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -608,6 +653,7 @@ export class AdminMatchesService {
       },
     });
 
+    this.events.emit({ type: 'match.live-data', matchId: id, kind: 'events' });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -653,6 +699,11 @@ export class AdminMatchesService {
       select: { language: true, stream_url: true, viewer_count: true },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'broadcasts',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 }

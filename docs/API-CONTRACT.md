@@ -22,7 +22,8 @@ THUMBZ is a Mobile Legends esports streaming and content platform. The backend e
 | Dates | ISO 8601 UTC strings (`2026-09-02T14:30:00Z`) |
 | IDs | UUID v4 strings |
 | Authentication | Supabase Auth JWT in `Authorization: Bearer <access_token>` (see §2) |
-| Rate limits | Write + auth endpoints throttled (§9) |
+| Rate limits | Write + auth endpoints throttled (§9), counters shared across instances via Redis |
+| Caching | Redis + CDN for public reads (§4.5) |
 
 Endpoints marked **public** require no authentication. Endpoints marked **user** require a valid session. Endpoints marked **admin** require a valid session whose profile has `role = "admin"`.
 
@@ -111,6 +112,21 @@ Filtering uses query parameters (whitelisted per endpoint, see §6). Unknown que
 | `order` | `asc` (default) or `desc` |
 
 Unknown sort key → `400 VALIDATION_ERROR`.
+
+### 4.5 Caching
+
+Public reads are cached server-side (Redis) and are CDN-cacheable; everything else is not.
+
+| Response | `Cache-Control` | Notes |
+| --- | --- | --- |
+| Public catalog/match reads | `public, max-age=0, s-maxage=<ttl>, stale-while-revalidate=<2×ttl>` | `Vary: Authorization`. TTLs: live sub-resources 3 s, ticket availability 5 s, live lists/match detail 10 s, lists 30 s, catalog 60 s. |
+| `GET /home` with a valid token | `private, no-store` | Per-user server cache entry; anonymous callers share one entry. |
+| `/me/*`, writes, admin, webhooks | `no-store` | Never cached. |
+
+- `X-Cache: HIT | MISS | BYPASS` reports the server cache outcome (`BYPASS` when Redis is unavailable — the API keeps serving from the database).
+- Writes invalidate affected entries immediately (tag-based, driven by domain events); TTLs bound staleness for anything else (e.g. player statistics after a score update, ≤ 60 s).
+- Express weak `ETag`s are emitted; `If-None-Match` revalidation returns `304`.
+- When `REVALIDATE_SECRET` is configured, the server calls `POST {FRONTEND_URL}/api/revalidate` with `{ "tags": [...] }` (coalesced per 500 ms) so the frontend's data cache refreshes on change.
 
 ### 4.4 Search
 

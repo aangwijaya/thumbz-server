@@ -12,6 +12,8 @@ import {
   PlayerSummary,
   PlayersService,
 } from './players.service';
+import { Cached } from '../../infra/cache/cached.decorator';
+import { CacheTags } from '../../infra/cache/cache-tags';
 
 @ApiTags('players')
 @Controller('players')
@@ -19,6 +21,7 @@ export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get()
   list(
     @Query() query: ListPlayersDto,
@@ -27,6 +30,7 @@ export class PlayersController {
   }
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get(':id/matches')
   playerMatches(
     @Param() params: PlayerIdParamsDto,
@@ -36,6 +40,7 @@ export class PlayersController {
   }
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get(':id/statistics')
   statistics(
     @Param() params: PlayerIdParamsDto,
@@ -44,6 +49,7 @@ export class PlayersController {
   }
 
   @Public()
+  @Cached({ ttl: 60, tags: () => [CacheTags.catalog] })
   @Get(':id')
   get(@Param() params: PlayerIdParamsDto): Promise<{ data: PlayerDetail }> {
     return this.playersService.get(params.id);

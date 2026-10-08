@@ -3,10 +3,14 @@ import { BusinessRuleException } from '../../common/errors/business-rule.excepti
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoldSnapshotDto } from './dto/upsert-economy.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async upsertEconomy(
     matchId: string,
@@ -57,6 +61,7 @@ export class AdminService {
       select: { team_id: true, gold: true, recorded_at: true },
     });
 
+    this.events.emit({ type: 'match.live-data', matchId, kind: 'economy' });
     return {
       data: rows.map((row) => ({
         team_id: row.team_id,

@@ -8,12 +8,15 @@ import { MatchIdParamsDto } from './dto/match-id-params.dto';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
 import { MatchDetail, MatchSummary, MatchesService } from './matches.service';
+import { Cached } from '../../infra/cache/cached.decorator';
+import { CacheTags } from '../../infra/cache/cache-tags';
 @ApiTags('matches')
 @Controller('matches')
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
 
   @Public()
+  @Cached({ ttl: 30, tags: () => [CacheTags.matches, CacheTags.catalog] })
   @Get()
   list(
     @Query() query: ListMatchesDto,
@@ -22,6 +25,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 10, tags: () => [CacheTags.live, CacheTags.catalog] })
   @Get('live')
   live(
     @Query() query: PaginationQueryDto,
@@ -30,6 +34,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 30, tags: () => [CacheTags.matches, CacheTags.catalog] })
   @Get('upcoming')
   upcoming(
     @Query() query: UpcomingMatchesDto,
@@ -38,12 +43,17 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 10, tags: () => [CacheTags.live, CacheTags.catalog] })
   @Get('featured')
   featured(): Promise<{ data: MatchDetail | null }> {
     return this.matchesService.featured();
   }
 
   @Public()
+  @Cached({
+    ttl: 15,
+    tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
+  })
   @Get(':id/statistics')
   statistics(@Param() params: MatchIdParamsDto): Promise<{
     data: {
@@ -56,6 +66,10 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({
+    ttl: 60,
+    tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
+  })
   @Get(':id/roster')
   roster(
     @Param() params: MatchIdParamsDto,
@@ -64,6 +78,10 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({
+    ttl: 60,
+    tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
+  })
   @Get(':id/history')
   history(
     @Param() params: MatchIdParamsDto,
@@ -72,6 +90,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 3, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/events')
   events(
     @Param() params: MatchIdParamsDto,
@@ -83,6 +102,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 3, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/equipment')
   equipment(@Param() params: MatchIdParamsDto): Promise<{
     data: Array<Record<string, unknown>>;
@@ -91,6 +111,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 3, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/live-stats')
   liveStats(
     @Param() params: MatchIdParamsDto,
@@ -102,6 +123,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 3, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/economy')
   economy(
     @Param() params: MatchIdParamsDto,
@@ -113,6 +135,7 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({ ttl: 10, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/broadcasts')
   broadcasts(@Param() params: MatchIdParamsDto): Promise<{
     data: Array<{ language: string; stream_url: string; viewer_count: number }>;
@@ -121,6 +144,10 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({
+    ttl: 60,
+    tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
+  })
   @Get(':id/related')
   related(
     @Param() params: MatchIdParamsDto,
@@ -129,6 +156,10 @@ export class MatchesController {
   }
 
   @Public()
+  @Cached({
+    ttl: 10,
+    tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
+  })
   @Get(':id')
   get(@Param() params: MatchIdParamsDto): Promise<{ data: MatchDetail }> {
     return this.matchesService.get(params.id);

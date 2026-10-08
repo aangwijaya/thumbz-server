@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { AdminVideosService } from './admin-videos.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -17,7 +18,7 @@ describe('AdminVideosService (integration, local Postgres)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaService();
-    adminVideos = new AdminVideosService(prisma);
+    adminVideos = new AdminVideosService(prisma, testEvents());
 
     const oldTeams = await prisma.team.findMany({
       where: { slug: { in: ['e2e-adminv-a', 'e2e-adminv-b'] } },
