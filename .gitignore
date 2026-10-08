@@ -33,3 +33,6 @@ skills-lock.json
 
 # packaged media (contains content keys until registered)
 /media-out
+
+# Private deployment notes
+/docs/DEPLOYMENT.md
