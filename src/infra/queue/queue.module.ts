@@ -3,6 +3,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 import type { ConnectionOptions } from 'bullmq';
 
 export const MAINTENANCE_QUEUE = 'maintenance';
+export const PAYMENTS_QUEUE = 'payments';
 
 /** BullMQ needs its own connection settings (blocking commands, no retry cap). */
 export function bullConnection(redisUrl: string): ConnectionOptions {
@@ -37,6 +38,15 @@ export class QueueModule {
         BullModule.forRoot({
           connection: bullConnection(redisUrl),
           prefix: 'thumbz:bull',
+        }),
+        BullModule.registerQueue({
+          name: PAYMENTS_QUEUE,
+          defaultJobOptions: {
+            attempts: 8,
+            backoff: { type: 'exponential', delay: 5_000 },
+            removeOnComplete: { age: 24 * 3600 },
+            removeOnFail: { age: 30 * 24 * 3600 },
+          },
         }),
         BullModule.registerQueue({
           name: MAINTENANCE_QUEUE,

@@ -2,6 +2,7 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { MAINTENANCE_QUEUE } from '../../infra/queue/queue.module';
+import { PaymentsService } from '../payments/payments.service';
 import { LiveSimulatorService } from '../simulator/live-simulator.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { Jobs } from './jobs.constants';
@@ -14,6 +15,7 @@ export class MaintenanceProcessor extends WorkerHost {
   constructor(
     private readonly tickets: TicketsService,
     private readonly simulator: LiveSimulatorService,
+    private readonly payments: PaymentsService,
   ) {
     super();
   }
@@ -24,6 +26,11 @@ export class MaintenanceProcessor extends WorkerHost {
         const expired = await this.tickets.expireStaleHolds();
         if (expired > 0) this.logger.log(`expired ${expired} ticket holds`);
         return { expired };
+      }
+      case Jobs.reconcilePayments: {
+        const resolved = await this.payments.reconcile();
+        if (resolved > 0) this.logger.log(`reconciled ${resolved} payments`);
+        return { resolved };
       }
       case Jobs.liveSimulator:
         await this.simulator.step();

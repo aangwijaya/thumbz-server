@@ -27,6 +27,13 @@ export interface AppConfig {
   liveSimulatorIntervalMs: number;
   /** Shared secret for POST {frontendUrl}/api/revalidate; null disables it. */
   revalidateSecret: string | null;
+  xenditSecretKey: string | null;
+  xenditCallbackToken: string | null;
+  xenditApiBase: string;
+  /** Demo/test: built-in sandbox provider + simulate endpoint (never in real production). */
+  paymentsSandbox: boolean;
+  /** HMAC key for ticket QR payloads (dev default outside production). */
+  ticketSigningSecret: string;
   nowpaymentsApiKey: string | null;
   nowpaymentsIpnSecret: string | null;
   nowpaymentsApiBase: string;
@@ -110,6 +117,15 @@ const envSchema = z
     REVALIDATE_SECRET: optional(
       z.string().min(16, 'REVALIDATE_SECRET must be at least 16 characters'),
     ),
+    XENDIT_SECRET_KEY: optional(z.string().trim()),
+    XENDIT_CALLBACK_TOKEN: optional(z.string().trim()),
+    XENDIT_API_BASE: optional(httpUrl),
+    PAYMENTS_SANDBOX: optional(z.enum(['true', 'false', '1', '0'])),
+    TICKET_SIGNING_SECRET: optional(
+      z
+        .string()
+        .min(32, 'TICKET_SIGNING_SECRET must be at least 32 characters'),
+    ),
     NOWPAYMENTS_API_KEY: optional(z.string().trim()),
     NOWPAYMENTS_IPN_SECRET: optional(z.string().trim()),
     NOWPAYMENTS_API_BASE: optional(httpUrl),
@@ -124,6 +140,7 @@ const envSchema = z
       'PUBLIC_API_URL',
       'FRONTEND_URL',
       'REDIS_URL',
+      'TICKET_SIGNING_SECRET',
     ] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({
@@ -179,6 +196,13 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     liveSimulator: ['true', '1'].includes(parsed.LIVE_SIMULATOR ?? ''),
     liveSimulatorIntervalMs: parsed.LIVE_SIMULATOR_INTERVAL_MS ?? 5_000,
     revalidateSecret: parsed.REVALIDATE_SECRET ?? null,
+    xenditSecretKey: parsed.XENDIT_SECRET_KEY || null,
+    xenditCallbackToken: parsed.XENDIT_CALLBACK_TOKEN || null,
+    xenditApiBase: parsed.XENDIT_API_BASE ?? 'https://api.xendit.co',
+    paymentsSandbox: ['true', '1'].includes(parsed.PAYMENTS_SANDBOX ?? ''),
+    ticketSigningSecret:
+      parsed.TICKET_SIGNING_SECRET ??
+      'dev-only-ticket-signing-secret-change-me',
     nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
     nowpaymentsApiBase:

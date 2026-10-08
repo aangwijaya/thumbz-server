@@ -945,11 +945,13 @@ async function main(): Promise<void> {
     venue: string;
     city: string;
     price: number;
+    /** IDR price enables QRIS / bank VA checkout; null = crypto only. */
+    priceIdr: number | null;
     quota: number;
   }> = [
-    { match: featuredLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, quota: 5000 },
-    { match: secondaryLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, quota: 3000 },
-    { match: phLive, venue: 'Mall of Asia Arena', city: 'Manila', price: 20, quota: 4000 },
+    { match: featuredLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, priceIdr: 400_000, quota: 5000 },
+    { match: secondaryLive, venue: 'GBK Basketball Hall', city: 'Jakarta', price: 25, priceIdr: 400_000, quota: 3000 },
+    { match: phLive, venue: 'Mall of Asia Arena', city: 'Manila', price: 20, priceIdr: null, quota: 4000 },
   ];
   for (const fixture of ticketFixtures) {
     await prisma.matchTicketConfig.upsert({
@@ -958,6 +960,7 @@ async function main(): Promise<void> {
         venue_name: fixture.venue,
         venue_city: fixture.city,
         price_usd: fixture.price,
+        price_idr: fixture.priceIdr,
         quota_total: fixture.quota,
         is_active: true,
       },
@@ -966,6 +969,7 @@ async function main(): Promise<void> {
         venue_name: fixture.venue,
         venue_city: fixture.city,
         price_usd: fixture.price,
+        price_idr: fixture.priceIdr,
         quota_total: fixture.quota,
         is_active: true,
       },
@@ -980,6 +984,7 @@ async function main(): Promise<void> {
         venue_name: 'Istora Senayan',
         venue_city: 'Jakarta',
         price_usd: 15,
+        price_idr: 250_000,
         quota_total: 8000,
         is_active: true,
       },
@@ -988,6 +993,7 @@ async function main(): Promise<void> {
         venue_name: 'Istora Senayan',
         venue_city: 'Jakarta',
         price_usd: 15,
+        price_idr: 250_000,
         quota_total: 8000,
         is_active: true,
       },

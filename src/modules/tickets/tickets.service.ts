@@ -1,35 +1,30 @@
-import {
-  BadRequestException,
-  Injectable,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Prisma, ticket_order_status } from '@prisma/client';
-import { randomBytes } from 'node:crypto';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { payment_method, Prisma, ticket_order_status } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
-  PaginationMeta,
+  PRISMA_SERIALIZATION_FAILURE,
+  prismaErrorCode,
+} from '../../common/errors/prisma-errors';
+import { orNotFound } from '../../common/utils/not-found';
+import {
   buildPaginationMeta,
+  PaginationMeta,
 } from '../../common/utils/pagination';
+import { DomainEvents } from '../../infra/events/domain-events';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   MatchSummary,
   SUMMARY_INCLUDE,
   toMatchSummary,
 } from '../matches/matches.service';
+import { MethodOption, PaymentRouter } from '../payments/payment-router';
+import { PaymentsService, PaymentView } from '../payments/payments.service';
+import { TicketSigner } from '../payments/ticket-signer';
 import { AdminOrdersDto } from './dto/admin-orders.dto';
 import { ListMyOrdersDto } from './dto/list-my-orders.dto';
 import { ListMyTicketsDto } from './dto/list-my-tickets.dto';
 import { TicketConfigDto } from './dto/ticket-config.dto';
-import { NowPaymentsClient } from './nowpayments.client';
-import {
-  isUniqueConstraintViolation,
-  PRISMA_SERIALIZATION_FAILURE,
-  prismaErrorCode,
-} from '../../common/errors/prisma-errors';
-import { orNotFound } from '../../common/utils/not-found';
-import { DomainEvents } from '../../infra/events/domain-events';
 
 const HOLD_MINUTES = 30;
 const MAX_PER_USER_PER_MATCH = 4;
@@ -39,12 +34,22 @@ export interface TicketAvailability {
   venue_name: string;
   venue_city: string | null;
   price_usd: number;
+  /** Price for IDR methods (QRIS / bank VA); null = crypto only. */
+  price_idr: number | null;
   quota_total: number;
   quota_remaining: number;
   sales_open_at: Date | null;
   sales_close_at: Date | null;
   on_sale: boolean;
+  /** Methods a buyer can pay with right now (gateway configured + priced). */
+  payment_methods: MethodOption[];
 }
+
+type LegacyPayment = {
+  provider: string;
+  invoice_url: string | null;
+  payment_id: string | null;
+};
 
 export interface TicketOrderView {
   id: string;
@@ -56,11 +61,12 @@ export interface TicketOrderView {
   expires_at: Date;
   created_at: Date;
   paid_at: Date | null;
-  payment: {
-    provider: string;
-    invoice_url: string | null;
-    payment_id: string | null;
-  };
+  /**
+   * The latest payment attempt: method, what to show the buyer (invoice URL,
+   * QRIS string or VA number) and its status. `payment_id` stays for older
+   * clients; orders created before multi-provider payments keep the legacy shape.
+   */
+  payment: (PaymentView & { payment_id: string }) | LegacyPayment;
 }
 
 export interface MatchTicketView {
@@ -68,36 +74,16 @@ export interface MatchTicketView {
   match_id: string;
   order_id: string;
   code: string;
+  /** Signed payload to render as the QR code (THMZ1.<code>.<mac>). */
+  qr_payload: string;
   status: string;
   issued_at: Date;
   match?: MatchSummary;
 }
 
+export type CheckInResult = 'checked_in' | 'already_used' | 'void' | 'invalid';
+
 type OrderRow = Prisma.TicketOrderGetPayload<object>;
-
-function toOrderView(row: OrderRow): TicketOrderView {
-  return {
-    id: row.id,
-    match_id: row.match_id,
-    quantity: row.quantity,
-    unit_price_usd: Number(row.unit_price_usd),
-    total_usd: Number(row.total_usd),
-    status: row.status,
-    expires_at: row.expires_at,
-    created_at: row.created_at,
-    paid_at: row.paid_at,
-    payment: {
-      provider: row.provider,
-      invoice_url: row.invoice_url,
-      payment_id: row.provider_payment_id,
-    },
-  };
-}
-
-function generateTicketCode(): string {
-  const raw = randomBytes(6).toString('hex').toUpperCase();
-  return `THMZ-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
-}
 
 function isSerializationFailure(error: unknown): boolean {
   return prismaErrorCode(error) === PRISMA_SERIALIZATION_FAILURE;
@@ -107,56 +93,31 @@ function isSerializationFailure(error: unknown): boolean {
 export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly provider: NowPaymentsClient,
-    private readonly config: ConfigService,
+    private readonly payments: PaymentsService,
+    private readonly router: PaymentRouter,
+    private readonly signer: TicketSigner,
     private readonly events: DomainEvents,
   ) {}
 
   async availability(
     matchId: string,
   ): Promise<{ data: TicketAvailability | null }> {
-    const match = orNotFound(
+    orNotFound(
       await this.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true },
+        select: { id: true },
       }),
     );
-
     await this.releaseExpiredHolds(matchId);
-
-    const config = await this.prisma.matchTicketConfig.findUnique({
-      where: { match_id: matchId },
-    });
-    if (config === null) {
-      return { data: null };
-    }
-
-    const remaining = await this.remainingQuota(matchId, config.quota_total);
-    return {
-      data: {
-        match_id: matchId,
-        venue_name: config.venue_name,
-        venue_city: config.venue_city,
-        price_usd: Number(config.price_usd),
-        quota_total: config.quota_total,
-        quota_remaining: remaining,
-        sales_open_at: config.sales_open_at,
-        sales_close_at: config.sales_close_at,
-        on_sale:
-          this.windowOpen(config) &&
-          (match.status === 'scheduled' || match.status === 'live') &&
-          remaining > 0,
-      },
-    };
+    const all = await this.availabilityForMatches([matchId]);
+    return { data: all.get(matchId) ?? null };
   }
 
   async availabilityForMatches(
     matchIds: string[],
   ): Promise<Map<string, TicketAvailability | null>> {
     const result = new Map<string, TicketAvailability | null>();
-    if (matchIds.length === 0) {
-      return result;
-    }
+    if (matchIds.length === 0) return result;
     const now = new Date();
     // Independent reads: run them concurrently, not one after another.
     const [configs, matches, ticketCounts, holds] = await Promise.all([
@@ -169,7 +130,7 @@ export class TicketsService {
       }),
       this.prisma.ticket.groupBy({
         by: ['match_id'],
-        where: { match_id: { in: matchIds } },
+        where: { match_id: { in: matchIds }, status: { not: 'void' } },
         _count: true,
       }),
       this.prisma.ticketOrder.groupBy({
@@ -182,7 +143,6 @@ export class TicketsService {
         _sum: { quantity: true },
       }),
     ]);
-    const configByMatch = new Map(configs.map((c) => [c.match_id, c]));
     const statusByMatch = new Map(matches.map((m) => [m.id, m.status]));
     const soldByMatch = new Map(
       ticketCounts.map((t) => [t.match_id, t._count]),
@@ -190,10 +150,11 @@ export class TicketsService {
     const heldByMatch = new Map(
       holds.map((h) => [h.match_id, h._sum?.quantity ?? 0]),
     );
+    const configByMatch = new Map(configs.map((c) => [c.match_id, c]));
 
     for (const id of matchIds) {
       const config = configByMatch.get(id);
-      if (config === undefined) {
+      if (!config) {
         result.set(id, null);
         continue;
       }
@@ -209,6 +170,7 @@ export class TicketsService {
         venue_name: config.venue_name,
         venue_city: config.venue_city,
         price_usd: Number(config.price_usd),
+        price_idr: config.price_idr,
         quota_total: config.quota_total,
         quota_remaining: remaining,
         sales_open_at: config.sales_open_at,
@@ -217,6 +179,10 @@ export class TicketsService {
           this.windowOpen(config) &&
           (status === 'scheduled' || status === 'live') &&
           remaining > 0,
+        payment_methods: this.router.methodsFor({
+          usd: Number(config.price_usd),
+          idr: config.price_idr,
+        }),
       });
     }
     return result;
@@ -226,11 +192,12 @@ export class TicketsService {
     matchId: string,
     user: CurrentUser,
     quantity: number,
+    method: payment_method = 'crypto',
   ): Promise<{ data: TicketOrderView }> {
-    if (!this.provider.isConfigured()) {
+    // Check before taking a hold: no gateway, no order.
+    if (!this.payments.isMethodAvailable(method)) {
       throw new ServiceUnavailableException();
     }
-
     const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id: matchId },
@@ -242,7 +209,6 @@ export class TicketsService {
         },
       }),
     );
-
     await this.releaseExpiredHolds(matchId);
 
     const order = await this.withSerializableRetry(async (tx) => {
@@ -256,9 +222,10 @@ export class TicketsService {
       ) {
         throw new BusinessRuleException('tickets are not on sale');
       }
-
-      const [soldTickets, holds] = await Promise.all([
-        tx.ticket.count({ where: { match_id: matchId } }),
+      const [sold, holds] = await Promise.all([
+        tx.ticket.count({
+          where: { match_id: matchId, status: { not: 'void' } },
+        }),
         tx.ticketOrder.aggregate({
           where: { match_id: matchId, status: 'pending' },
           _sum: { quantity: true },
@@ -266,13 +233,12 @@ export class TicketsService {
       ]);
       const remaining = Math.max(
         0,
-        config.quota_total - soldTickets - (holds._sum.quantity ?? 0),
+        config.quota_total - sold - (holds._sum.quantity ?? 0),
       );
       if (quantity > remaining) {
         throw new BusinessRuleException('quota exceeded');
       }
-
-      const ownTickets = await tx.ticketOrder.aggregate({
+      const own = await tx.ticketOrder.aggregate({
         where: {
           match_id: matchId,
           user_id: user.sub,
@@ -280,13 +246,11 @@ export class TicketsService {
         },
         _sum: { quantity: true },
       });
-      const ownQuantity = ownTickets._sum.quantity ?? 0;
-      if (ownQuantity + quantity > MAX_PER_USER_PER_MATCH) {
+      if ((own._sum.quantity ?? 0) + quantity > MAX_PER_USER_PER_MATCH) {
         throw new BusinessRuleException(
           `at most ${MAX_PER_USER_PER_MATCH} tickets per user per match`,
         );
       }
-
       return tx.ticketOrder.create({
         data: {
           match_id: matchId,
@@ -299,35 +263,56 @@ export class TicketsService {
         },
       });
     });
-
     // The hold reduces availability immediately.
     this.events.emit({ type: 'tickets.changed', matchId });
 
-    const feBase =
-      this.config.get<string>('frontendUrl') ?? 'http://localhost:3000';
-    const apiBase =
-      this.config.get<string>('publicApiUrl') ?? 'http://localhost:3001';
     try {
-      const invoice = await this.provider.createInvoice({
-        orderId: order.id,
-        priceUsd: Number(order.total_usd),
-        description: `${match.teamA.name} vs ${match.teamB.name} — venue ticket`,
-        successUrl: `${feBase}/orders/${order.id}?status=success`,
-        cancelUrl: `${feBase}/orders/${order.id}?status=cancel`,
-        ipnUrl: `${apiBase}/api/v1/webhooks/nowpayments`,
-      });
-      const updated = await this.prisma.ticketOrder.update({
-        where: { id: order.id },
-        data: { invoice_url: invoice.invoiceUrl },
-      });
-      return { data: toOrderView(updated) };
+      const payment = await this.payments.start(
+        order,
+        method,
+        `${match.teamA.name} vs ${match.teamB.name} — venue ticket`,
+        user.name ?? 'THUMBZ ticket',
+      );
+      return { data: this.toOrderView(order, payment) };
     } catch (error) {
       await this.prisma.ticketOrder.updateMany({
         where: { id: order.id, status: 'pending' },
         data: { status: 'failed' },
       });
+      this.events.emit({ type: 'tickets.changed', matchId });
       throw error;
     }
+  }
+
+  /** New attempt for a pending order (e.g. switch from QRIS to a bank VA). */
+  async startPayment(
+    user: CurrentUser,
+    orderId: string,
+    method: payment_method,
+  ): Promise<{ data: TicketOrderView }> {
+    const order = orNotFound(
+      await this.prisma.ticketOrder.findFirst({
+        where: { id: orderId, user_id: user.sub },
+        include: {
+          match: {
+            select: {
+              teamA: { select: { name: true } },
+              teamB: { select: { name: true } },
+            },
+          },
+        },
+      }),
+    );
+    if (!this.payments.isMethodAvailable(method)) {
+      throw new ServiceUnavailableException();
+    }
+    const payment = await this.payments.start(
+      order,
+      method,
+      `${order.match.teamA.name} vs ${order.match.teamB.name} — venue ticket`,
+      user.name ?? 'THUMBZ ticket',
+    );
+    return { data: this.toOrderView(order, payment) };
   }
 
   async listOrders(
@@ -335,9 +320,7 @@ export class TicketsService {
     query: ListMyOrdersDto,
   ): Promise<{ data: TicketOrderView[]; meta: PaginationMeta }> {
     const where: Prisma.TicketOrderWhereInput = { user_id: user.sub };
-    if (query.status) {
-      where.status = query.status;
-    }
+    if (query.status) where.status = query.status;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.ticketOrder.findMany({
         where,
@@ -347,8 +330,9 @@ export class TicketsService {
       }),
       this.prisma.ticketOrder.count({ where }),
     ]);
+    const latest = await this.payments.latestFor(rows.map((row) => row.id));
     return {
-      data: rows.map(toOrderView),
+      data: rows.map((row) => this.toOrderView(row, latest.get(row.id))),
       meta: buildPaginationMeta(query.page, query.pageSize, total),
     };
   }
@@ -360,11 +344,12 @@ export class TicketsService {
     const row = orNotFound(
       await this.prisma.ticketOrder.findFirst({
         where: { id, user_id: user.sub },
-        include: { tickets: { orderBy: { issued_at: 'asc' } } },
+        include: { tickets: { orderBy: { seq: 'asc' } } },
       }),
     );
+    const latest = await this.payments.latestFor([row.id]);
     return {
-      data: toOrderView(row),
+      data: this.toOrderView(row, latest.get(row.id)),
       tickets: row.tickets.map((ticket) => this.toTicketView(ticket)),
     };
   }
@@ -378,7 +363,7 @@ export class TicketsService {
     );
     if (row.status === 'paid') {
       throw new BusinessRuleException(
-        'paid orders cannot be cancelled; crypto payments are not refunded automatically',
+        'paid orders cannot be cancelled; payments are not refunded automatically',
       );
     }
     const cancelled = await this.prisma.ticketOrder.updateMany({
@@ -386,6 +371,10 @@ export class TicketsService {
       data: { status: 'cancelled' },
     });
     if (cancelled.count > 0) {
+      await this.prisma.payment.updateMany({
+        where: { order_id: id, status: 'pending' },
+        data: { status: 'cancelled', failure_reason: 'order_cancelled' },
+      });
       this.events.emit({ type: 'tickets.changed', matchId: row.match_id });
     }
   }
@@ -395,9 +384,7 @@ export class TicketsService {
     query: ListMyTicketsDto,
   ): Promise<{ data: MatchTicketView[]; meta: PaginationMeta }> {
     const where: Prisma.TicketWhereInput = { user_id: user.sub };
-    if (query.match_id) {
-      where.match_id = query.match_id;
-    }
+    if (query.match_id) where.match_id = query.match_id;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.ticket.findMany({
         where,
@@ -417,17 +404,40 @@ export class TicketsService {
     };
   }
 
+  /** Venue gate: verifies the signed QR payload and admits each ticket once. */
+  async checkIn(
+    payload: string,
+  ): Promise<{ data: { result: CheckInResult; code?: string } }> {
+    const code = this.signer.verify(payload);
+    if (!code) return { data: { result: 'invalid' } };
+    const admitted = await this.prisma.ticket.updateMany({
+      where: { code, status: 'valid' },
+      data: { status: 'used' },
+    });
+    if (admitted.count === 1) return { data: { result: 'checked_in', code } };
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { code },
+      select: { status: true },
+    });
+    const result: CheckInResult =
+      ticket?.status === 'used'
+        ? 'already_used'
+        : ticket?.status === 'void'
+          ? 'void'
+          : 'invalid';
+    return { data: { result, code } };
+  }
+
   async upsertConfig(
     matchId: string,
     dto: TicketConfigDto,
   ): Promise<{ data: TicketAvailability }> {
-    const match = orNotFound(
+    orNotFound(
       await this.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true },
+        select: { id: true },
       }),
     );
-
     await this.releaseExpiredHolds(matchId);
     const used = await this.usedQuota(matchId);
     if (dto.quota_total < used) {
@@ -435,11 +445,11 @@ export class TicketsService {
         `quota_total cannot be below the ${used} tickets already sold/held`,
       );
     }
-
     const data = {
       venue_name: dto.venue_name,
       venue_city: dto.venue_city ?? null,
       price_usd: new Prisma.Decimal(dto.price_usd),
+      price_idr: dto.price_idr ?? null,
       quota_total: dto.quota_total,
       sales_open_at:
         dto.sales_open_at !== undefined ? new Date(dto.sales_open_at) : null,
@@ -447,30 +457,14 @@ export class TicketsService {
         dto.sales_close_at !== undefined ? new Date(dto.sales_close_at) : null,
       is_active: dto.is_active ?? true,
     };
-    const config = await this.prisma.matchTicketConfig.upsert({
+    await this.prisma.matchTicketConfig.upsert({
       where: { match_id: matchId },
       create: { match_id: matchId, ...data },
       update: data,
     });
-
     this.events.emit({ type: 'tickets.changed', matchId });
-    const remaining = await this.remainingQuota(matchId, config.quota_total);
-    return {
-      data: {
-        match_id: matchId,
-        venue_name: config.venue_name,
-        venue_city: config.venue_city,
-        price_usd: Number(config.price_usd),
-        quota_total: config.quota_total,
-        quota_remaining: remaining,
-        sales_open_at: config.sales_open_at,
-        sales_close_at: config.sales_close_at,
-        on_sale:
-          this.windowOpen(config) &&
-          (match.status === 'scheduled' || match.status === 'live') &&
-          remaining > 0,
-      },
-    };
+    const all = await this.availabilityForMatches([matchId]);
+    return { data: all.get(matchId)! };
   }
 
   async adminListOrders(query: AdminOrdersDto): Promise<{
@@ -478,12 +472,8 @@ export class TicketsService {
     meta: PaginationMeta;
   }> {
     const where: Prisma.TicketOrderWhereInput = {};
-    if (query.match_id) {
-      where.match_id = query.match_id;
-    }
-    if (query.status) {
-      where.status = query.status;
-    }
+    if (query.match_id) where.match_id = query.match_id;
+    if (query.status) where.status = query.status;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.ticketOrder.findMany({
         where,
@@ -493,118 +483,14 @@ export class TicketsService {
       }),
       this.prisma.ticketOrder.count({ where }),
     ]);
+    const latest = await this.payments.latestFor(rows.map((row) => row.id));
     return {
-      data: rows.map((row) => ({ ...toOrderView(row), user_id: row.user_id })),
+      data: rows.map((row) => ({
+        ...this.toOrderView(row, latest.get(row.id)),
+        user_id: row.user_id,
+      })),
       meta: buildPaginationMeta(query.page, query.pageSize, total),
     };
-  }
-
-  async handleWebhook(
-    rawBody: Buffer | undefined,
-    signature: unknown,
-  ): Promise<{ ok: true }> {
-    if (!this.provider.isConfigured()) {
-      throw new ServiceUnavailableException();
-    }
-    if (!this.provider.verifyIpn(rawBody, signature)) {
-      throw new BadRequestException();
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawBody?.toString('utf8') ?? '{}');
-    } catch {
-      throw new BadRequestException();
-    }
-    const payload: {
-      payment_id?: string | number;
-      payment_status?: string;
-      order_id?: string;
-    } = typeof parsed === 'object' && parsed !== null ? parsed : {};
-
-    const orderId = payload.order_id;
-    const paymentStatus = payload.payment_status;
-    if (typeof orderId !== 'string' || typeof paymentStatus !== 'string') {
-      return { ok: true };
-    }
-
-    const order = await this.prisma.ticketOrder.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        status: true,
-        quantity: true,
-        match_id: true,
-        user_id: true,
-      },
-    });
-    if (order === null) {
-      return { ok: true };
-    }
-
-    const paymentId =
-      payload.payment_id !== undefined ? String(payload.payment_id) : null;
-
-    if (paymentStatus === 'finished' || paymentStatus === 'confirmed') {
-      if (paymentId !== null) {
-        try {
-          await this.prisma.ticketOrder.updateMany({
-            where: { id: order.id, status: { not: 'paid' } },
-            data: {
-              status: 'paid',
-              paid_at: new Date(),
-              provider_payment_id: paymentId,
-            },
-          });
-        } catch (error) {
-          if (!isUniqueConstraintViolation(error)) {
-            throw error;
-          }
-        }
-      }
-      const current = await this.prisma.ticketOrder.findUnique({
-        where: { id: order.id },
-        select: { status: true },
-      });
-      if (current?.status === 'paid') {
-        await this.ensureTicketsIssued(
-          order.id,
-          order.match_id,
-          order.user_id,
-          order.quantity,
-        );
-      }
-      return this.acknowledge(order.match_id);
-    }
-
-    if (paymentStatus === 'failed' || paymentStatus === 'refunded') {
-      const transitioned = await this.prisma.ticketOrder.updateMany({
-        where: { id: order.id, status: 'pending' },
-        data: { status: 'failed' },
-      });
-      if (transitioned.count === 0) {
-        const voided = await this.prisma.ticketOrder.updateMany({
-          where: { id: order.id, status: 'paid' },
-          data: { status: 'failed' },
-        });
-        if (voided.count > 0) {
-          await this.prisma.ticket.updateMany({
-            where: { order_id: order.id },
-            data: { status: 'void' },
-          });
-        }
-      }
-      return this.acknowledge(order.match_id);
-    }
-
-    if (paymentStatus === 'expired') {
-      await this.prisma.ticketOrder.updateMany({
-        where: { id: order.id, status: 'pending' },
-        data: { status: 'expired' },
-      });
-    }
-
-    return this.acknowledge(order.match_id);
   }
 
   /**
@@ -618,9 +504,7 @@ export class TicketsService {
       select: { id: true, match_id: true, user_id: true },
       take: batch,
     });
-    if (stale.length === 0) {
-      return 0;
-    }
+    if (stale.length === 0) return 0;
     const expired = await this.prisma.ticketOrder.updateMany({
       // Re-check the status: a payment may have landed in between.
       where: { id: { in: stale.map((order) => order.id) }, status: 'pending' },
@@ -641,33 +525,25 @@ export class TicketsService {
     return expired.count;
   }
 
-  /** Availability changed for the match: tell caches and listeners. */
-  private acknowledge(matchId: string): { ok: true } {
-    this.events.emit({ type: 'tickets.changed', matchId });
-    return { ok: true };
-  }
-
-  private async ensureTicketsIssued(
-    orderId: string,
-    matchId: string,
-    userId: string,
-    quantity: number,
-  ): Promise<void> {
-    const existing = await this.prisma.ticket.count({
-      where: { order_id: orderId },
-    });
-    if (existing >= quantity) {
-      return;
-    }
-    await this.prisma.ticket.createMany({
-      data: Array.from({ length: quantity - existing }, () => ({
-        order_id: orderId,
-        match_id: matchId,
-        user_id: userId,
-        code: generateTicketCode(),
-        status: 'valid' as const,
-      })),
-    });
+  private toOrderView(row: OrderRow, payment?: PaymentView): TicketOrderView {
+    return {
+      id: row.id,
+      match_id: row.match_id,
+      quantity: row.quantity,
+      unit_price_usd: Number(row.unit_price_usd),
+      total_usd: Number(row.total_usd),
+      status: row.status,
+      expires_at: row.expires_at,
+      created_at: row.created_at,
+      paid_at: row.paid_at,
+      payment: payment
+        ? { ...payment, payment_id: payment.id }
+        : {
+            provider: row.provider,
+            invoice_url: row.invoice_url,
+            payment_id: row.provider_payment_id,
+          },
+    };
   }
 
   private toTicketView(row: {
@@ -683,6 +559,7 @@ export class TicketsService {
       match_id: row.match_id,
       order_id: row.order_id,
       code: row.code,
+      qr_payload: this.signer.sign(row.code),
       status: row.status,
       issued_at: row.issued_at,
     };
@@ -694,9 +571,7 @@ export class TicketsService {
     sales_close_at: Date | null;
   }): boolean {
     const now = Date.now();
-    if (!config.is_active) {
-      return false;
-    }
+    if (!config.is_active) return false;
     if (config.sales_open_at !== null && config.sales_open_at.getTime() > now) {
       return false;
     }
@@ -722,21 +597,15 @@ export class TicketsService {
 
   private async usedQuota(matchId: string): Promise<number> {
     const [tickets, holds] = await this.prisma.$transaction([
-      this.prisma.ticket.count({ where: { match_id: matchId } }),
+      this.prisma.ticket.count({
+        where: { match_id: matchId, status: { not: 'void' } },
+      }),
       this.prisma.ticketOrder.aggregate({
         where: { match_id: matchId, status: 'pending' },
         _sum: { quantity: true },
       }),
     ]);
     return tickets + (holds._sum.quantity ?? 0);
-  }
-
-  private async remainingQuota(
-    matchId: string,
-    quotaTotal: number,
-  ): Promise<number> {
-    const used = await this.usedQuota(matchId);
-    return Math.max(0, quotaTotal - used);
   }
 
   private async withSerializableRetry<T>(
@@ -749,9 +618,7 @@ export class TicketsService {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         });
       } catch (error) {
-        if (attempt < attempts && isSerializationFailure(error)) {
-          continue;
-        }
+        if (attempt < attempts && isSerializationFailure(error)) continue;
         throw error;
       }
     }

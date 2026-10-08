@@ -1,21 +1,20 @@
 import { Module } from '@nestjs/common';
-import { NowPaymentsClient } from './nowpayments.client';
+import { PaymentsModule } from '../payments/payments.module';
 import {
   AdminTicketsController,
   MatchTicketsController,
   MeTicketsController,
-  PaymentWebhooksController,
 } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 
 @Module({
+  imports: [PaymentsModule],
   controllers: [
     MatchTicketsController,
     MeTicketsController,
     AdminTicketsController,
-    PaymentWebhooksController,
   ],
-  providers: [TicketsService, NowPaymentsClient],
+  providers: [TicketsService],
   exports: [TicketsService],
 })
 export class TicketsModule {}

@@ -8,6 +8,7 @@ import { QueueModule } from './infra/queue/queue.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { RevalidationModule } from './infra/revalidation/revalidation.module';
 import { JobsWorkerModule } from './modules/jobs/jobs.module';
+import { PaymentsWorkerModule } from './modules/payments/payments.module';
 import { RealtimeEmitterModule } from './modules/realtime/realtime.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -29,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module';
     QueueModule.forRoot(),
     RealtimeEmitterModule,
     JobsWorkerModule,
+    PaymentsWorkerModule,
   ],
 })
 export class WorkerModule {}

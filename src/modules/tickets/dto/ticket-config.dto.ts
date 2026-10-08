@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -24,6 +25,13 @@ export class TicketConfigDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   price_usd: number;
+
+  /** Price for QRIS / bank VA (whole rupiah). Omit to offer crypto only. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20_000_000)
+  price_idr?: number;
 
   @IsInt()
   @Min(1)

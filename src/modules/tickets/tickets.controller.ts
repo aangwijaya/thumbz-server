@@ -2,29 +2,32 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
   Post,
   Put,
   Query,
-  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Idempotent } from '../../common/idempotency/idempotent.decorator';
 import { PaginationMeta } from '../../common/utils/pagination';
 import { AdminIdParamsDto } from '../admin/dto/admin-id-params.dto';
 import { MatchIdParamsDto } from '../matches/dto/match-id-params.dto';
 import { AdminOrdersDto } from './dto/admin-orders.dto';
-import { CreateOrderDto } from './dto/create-order.dto';
+import {
+  CheckInDto,
+  CreateOrderDto,
+  StartPaymentDto,
+} from './dto/create-order.dto';
 import { ListMyOrdersDto } from './dto/list-my-orders.dto';
 import { ListMyTicketsDto } from './dto/list-my-tickets.dto';
 import { TicketConfigDto } from './dto/ticket-config.dto';
 import {
+  CheckInResult,
   MatchTicketView,
   TicketAvailability,
   TicketOrderView,
@@ -32,8 +35,6 @@ import {
 } from './tickets.service';
 import { Cached } from '../../infra/cache/cached.decorator';
 import { CacheTags } from '../../infra/cache/cache-tags';
-
-type RawBodyRequest = Request & { rawBody?: Buffer };
 
 @ApiTags('matches')
 @Controller('matches')
@@ -50,13 +51,19 @@ export class MatchTicketsController {
   }
 
   @ApiBearerAuth()
+  @Idempotent()
   @Post(':id/orders')
   createOrder(
     @Param() params: MatchIdParamsDto,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: CurrentUser,
     @Body() body: CreateOrderDto,
   ): Promise<{ data: TicketOrderView }> {
-    return this.tickets.createOrder(params.id, user, body.quantity);
+    return this.tickets.createOrder(
+      params.id,
+      user,
+      body.quantity,
+      body.payment_method ?? 'crypto',
+    );
   }
 }
 
@@ -80,6 +87,17 @@ export class MeTicketsController {
     @CurrentUser() user: { sub: string },
   ): Promise<{ data: TicketOrderView; tickets: MatchTicketView[] }> {
     return this.tickets.getOrder(user, params.id);
+  }
+
+  /** Pay a pending order with another method (supersedes earlier attempts). */
+  @Idempotent()
+  @Post('orders/:id/payments')
+  startPayment(
+    @Param() params: AdminIdParamsDto,
+    @CurrentUser() user: CurrentUser,
+    @Body() body: StartPaymentDto,
+  ): Promise<{ data: TicketOrderView }> {
+    return this.tickets.startPayment(user, params.id, body.method);
   }
 
   @Post('orders/:id/cancel')
@@ -115,6 +133,16 @@ export class AdminTicketsController {
     return this.tickets.upsertConfig(params.id, body);
   }
 
+  /** Venue scanners: verify a ticket QR and admit it once. */
+  @Roles('admin')
+  @Post('tickets/check-in')
+  @HttpCode(HttpStatus.OK)
+  checkIn(
+    @Body() body: CheckInDto,
+  ): Promise<{ data: { result: CheckInResult; code?: string } }> {
+    return this.tickets.checkIn(body.payload);
+  }
+
   @Roles('admin')
   @Get('orders')
   listOrders(@Query() query: AdminOrdersDto): Promise<{
@@ -122,21 +150,5 @@ export class AdminTicketsController {
     meta: PaginationMeta;
   }> {
     return this.tickets.adminListOrders(query);
-  }
-}
-
-@ApiTags('webhooks')
-@Controller('webhooks')
-export class PaymentWebhooksController {
-  constructor(private readonly tickets: TicketsService) {}
-
-  @Public()
-  @Post('nowpayments')
-  @HttpCode(HttpStatus.OK)
-  handleNowPayments(
-    @Req() request: RawBodyRequest,
-    @Headers('x-nowpayments-sig') signature?: string,
-  ): Promise<{ ok: true }> {
-    return this.tickets.handleWebhook(request.rawBody, signature);
   }
 }

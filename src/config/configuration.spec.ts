@@ -97,6 +97,11 @@ describe('configuration', () => {
       liveSimulator: false,
       liveSimulatorIntervalMs: 5_000,
       revalidateSecret: null,
+      xenditSecretKey: null,
+      xenditCallbackToken: null,
+      xenditApiBase: 'https://api.xendit.co',
+      paymentsSandbox: false,
+      ticketSigningSecret: 'dev-only-ticket-signing-secret-change-me',
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,
       nowpaymentsApiBase: 'https://api-sandbox.nowpayments.io',
@@ -129,9 +134,9 @@ describe('configuration', () => {
 describe('validateEnv in production', () => {
   const production = { ...validEnv, NODE_ENV: 'production' };
 
-  it('requires PUBLIC_API_URL, FRONTEND_URL and REDIS_URL', () => {
+  it('requires PUBLIC_API_URL, FRONTEND_URL, REDIS_URL and TICKET_SIGNING_SECRET', () => {
     expect(() => validateEnv(production)).toThrow(
-      /PUBLIC_API_URL[\s\S]*FRONTEND_URL[\s\S]*REDIS_URL/,
+      /PUBLIC_API_URL[\s\S]*FRONTEND_URL[\s\S]*REDIS_URL[\s\S]*TICKET_SIGNING_SECRET/,
     );
   });
 
@@ -142,6 +147,7 @@ describe('validateEnv in production', () => {
         PUBLIC_API_URL: 'https://api.thumbz.example',
         FRONTEND_URL: 'https://thumbz.example',
         REDIS_URL: 'redis://default:pw@redis.internal:6379',
+        TICKET_SIGNING_SECRET: 'x'.repeat(32),
       }),
     ).not.toThrow();
   });

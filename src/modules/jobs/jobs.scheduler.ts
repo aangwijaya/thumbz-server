@@ -3,7 +3,11 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { MAINTENANCE_QUEUE } from '../../infra/queue/queue.module';
-import { EXPIRE_HOLDS_EVERY_MS, Jobs } from './jobs.constants';
+import {
+  EXPIRE_HOLDS_EVERY_MS,
+  Jobs,
+  RECONCILE_PAYMENTS_EVERY_MS,
+} from './jobs.constants';
 
 /**
  * Declares the recurring jobs. Job schedulers are idempotent upserts stored
@@ -24,6 +28,12 @@ export class JobsScheduler implements OnApplicationBootstrap {
       Jobs.expireHolds,
       { every: EXPIRE_HOLDS_EVERY_MS },
       { name: Jobs.expireHolds },
+    );
+
+    await this.queue.upsertJobScheduler(
+      Jobs.reconcilePayments,
+      { every: RECONCILE_PAYMENTS_EVERY_MS },
+      { name: Jobs.reconcilePayments },
     );
 
     if (this.config.get<boolean>('liveSimulator')) {

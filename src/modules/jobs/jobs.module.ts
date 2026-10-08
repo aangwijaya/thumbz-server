@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PaymentsModule } from '../payments/payments.module';
 import { SimulatorModule } from '../simulator/simulator.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { JobsController } from './jobs.controller';
@@ -11,7 +12,7 @@ export class JobsApiModule {}
 
 /** Worker side: schedules and processes the maintenance jobs. */
 @Module({
-  imports: [TicketsModule, SimulatorModule],
+  imports: [TicketsModule, SimulatorModule, PaymentsModule],
   providers: [MaintenanceProcessor, JobsScheduler],
 })
 export class JobsWorkerModule {}

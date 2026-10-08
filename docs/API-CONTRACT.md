@@ -1581,3 +1581,61 @@ A separate **worker** process (`node dist/worker.js`, same image as the API, no 
 Jobs retry with exponential backoff (3 attempts; the simulator never retries). Events emitted in the worker reach browsers through Redis (`@socket.io/redis-emitter` → API instances' sockets), invalidate the Redis cache directly and trigger frontend revalidation.
 
 `GET /api/v1/admin/jobs` (admin): `{ data: { enabled, counts: { waiting, active, delayed, completed, failed }, schedulers: [{ id, every, next }], recent_failures: [...] } }`. Queue depth is also exported as `thumbz_queue_jobs{state}` on `/metrics`.
+
+---
+
+## 16. Payments (crypto, QRIS, bank virtual accounts)
+
+Gateways sit behind one `PaymentProvider` interface; order logic never depends on a specific gateway.
+
+| Method | Gateway | Currency | Customer action |
+| --- | --- | --- | --- |
+| `crypto` | NOWPayments hosted invoice | USD (`price_usd`) | `redirect` → `invoice_url` |
+| `qris` | Xendit Payments API v3 (`channel_code: QRIS`) | IDR (`price_idr`) | `qr` → render `qr_string` as a QR code |
+| `va_bca`, `va_bni`, `va_bri`, `va_mandiri`, `va_permata` | Xendit Payments API v3 (`<BANK>_VIRTUAL_ACCOUNT`, min Rp10.000) | IDR | `va` → show `va_number` + `bank` |
+
+With `PAYMENTS_SANDBOX=true` (demo/test only) a built-in sandbox gateway serves any method that has no configured real gateway: it returns a well-formed QRIS string / VA number / checkout link, and `POST /me/payments/:id/simulate` (owner only, `202`) completes the payment through the regular pipeline.
+
+**Ticket availability** (`GET /matches/:id/ticket`) adds `price_idr` (null = crypto only) and `payment_methods: [{ method, label, family, currency, unit_amount, bank, provider }]` — only methods whose gateway is configured and that are priced.
+
+**Checkout** — `POST /matches/:id/orders { quantity, payment_method? = "crypto" }`. The order holds the seats for 30 minutes and opens the first payment attempt. Response `data.payment`:
+
+```json
+{ "id": "uuid", "provider": "xendit", "method": "qris", "status": "pending",
+  "currency": "IDR", "amount": 500000, "kind": "qr",
+  "invoice_url": null, "qr_string": "00020101…", "va_number": null, "bank": null,
+  "expires_at": "…", "created_at": "…", "payment_id": "uuid" }
+```
+
+Orders created before multi-provider payments keep the legacy `{ provider, invoice_url, payment_id }` shape.
+
+**Switch method** — `POST /me/orders/:id/payments { method }` opens a new attempt for a pending order; earlier pending attempts become `cancelled`.
+
+**Idempotency** — both POSTs accept `Idempotency-Key` (8–128 chars `[A-Za-z0-9_-]`). The first response is stored for 24 h and replayed (same status/body, header `Idempotent-Replayed: true`); the same key with a different body → `422`; a concurrent request with the key still in flight → `409`. Failed requests are not stored, so they can be retried with the same key.
+
+**Webhooks** (public, authenticated per gateway):
+
+| URL | Authenticity |
+| --- | --- |
+| `POST /webhooks/nowpayments` | `x-nowpayments-sig` = HMAC-SHA512 of the key-sorted JSON with the IPN secret |
+| `POST /webhooks/xendit` | `x-callback-token` equals the account's callback token (`payment.capture`, `payment.failure`) |
+
+Processing: verify → store in the `payment_events` inbox (unique per gateway event, so retries/duplicates are acknowledged and ignored) → apply inline under row locks on the payment and its order → on failure, queue a retry (worker, exponential backoff). The response is `200 { ok: true }` once the event is safely stored. A forged signature/token → `400`; gateway not configured → `503`.
+
+**Order state machine** (applied per event):
+
+| Event | Situation | Result |
+| --- | --- | --- |
+| succeeded | order pending, amount ≥ expected, same currency | order `paid`, tickets issued (exactly `quantity`, unique per `(order_id, seq)`), other attempts `cancelled` |
+| succeeded | amount short / wrong currency | attempt `failed` (`amount_mismatch`); no tickets |
+| succeeded | order expired/cancelled, seats still available | order `paid` (late payment honored) |
+| succeeded | order expired/cancelled, no seats left | order `refund_required`; no tickets (never oversell) |
+| succeeded | order already paid by another attempt | attempt `succeeded`, flagged `duplicate_payment_refund_required` |
+| failed / expired | attempt pending | attempt `failed` / `expired`; the order keeps its hold so the buyer can retry |
+| refunded | order paid | order `failed`, tickets `void` |
+
+Order statuses now include `refund_required`. A `reconcile-payments` job (every 5 min) asks gateways about attempts still pending after 2 minutes (Xendit `GET /v3/payment_requests/:id`), covering lost webhooks.
+
+**Tickets** carry `qr_payload` = `THMZ1.<code>.<hmac>`; render it as the QR code. `POST /admin/tickets/check-in { payload }` (admin, venue scanners) → `{ data: { result: "checked_in" | "already_used" | "void" | "invalid", code } }`; each ticket is admitted once (atomic). Voided tickets no longer count against the quota.
+
+**Realtime**: buyers receive `order:update` in their user room when an order changes (paid, expired, refund_required).

@@ -2059,6 +2059,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "8–128 chars [A-Za-z0-9_-]; retries with the same key replay the first response",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2120,10 +2129,11 @@
               "type": "string",
               "enum": [
                 "cancelled",
+                "failed",
+                "expired",
                 "pending",
                 "paid",
-                "expired",
-                "failed"
+                "refund_required"
               ]
             }
           }
@@ -2167,6 +2177,55 @@
             "bearer": []
           }
         ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{id}/payments": {
+      "post": {
+        "operationId": "MeTickets_startPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "8–128 chars [A-Za-z0-9_-]; retries with the same key replay the first response",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pay a pending order with another method (supersedes earlier attempts).",
         "tags": [
           "me"
         ]
@@ -2291,6 +2350,36 @@
         ]
       }
     },
+    "/api/v1/admin/tickets/check-in": {
+      "post": {
+        "operationId": "AdminTickets_checkIn",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Venue scanners: verify a ticket QR and admit it once.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/orders": {
       "get": {
         "operationId": "AdminTickets_listOrders",
@@ -2334,10 +2423,11 @@
               "type": "string",
               "enum": [
                 "cancelled",
+                "failed",
+                "expired",
                 "pending",
                 "paid",
-                "expired",
-                "failed"
+                "refund_required"
               ]
             }
           }
@@ -2359,10 +2449,33 @@
     },
     "/api/v1/webhooks/nowpayments": {
       "post": {
-        "operationId": "PaymentWebhooks_handleNowPayments",
+        "operationId": "PaymentWebhooks_nowpayments",
         "parameters": [
           {
             "name": "x-nowpayments-sig",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/webhooks/xendit": {
+      "post": {
+        "operationId": "PaymentWebhooks_xendit",
+        "parameters": [
+          {
+            "name": "x-callback-token",
             "required": true,
             "in": "header",
             "schema": {
@@ -3332,6 +3445,20 @@
       "CreateOrderDto": {
         "type": "object",
         "properties": {
+          "payment_method": {
+            "description": "Defaults to crypto (the original, still-supported flow).",
+            "enum": [
+              "crypto",
+              "qris",
+              "va_bca",
+              "va_bni",
+              "va_bri",
+              "va_mandiri",
+              "va_permata"
+            ],
+            "type": "string",
+            "default": "crypto"
+          },
           "quantity": {
             "type": "number",
             "minimum": 1,
@@ -3340,6 +3467,26 @@
         },
         "required": [
           "quantity"
+        ]
+      },
+      "StartPaymentDto": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "crypto",
+              "qris",
+              "va_bca",
+              "va_bni",
+              "va_bri",
+              "va_mandiri",
+              "va_permata"
+            ]
+          }
+        },
+        "required": [
+          "method"
         ]
       },
       "TicketConfigDto": {
@@ -3357,6 +3504,12 @@
           "price_usd": {
             "type": "number",
             "minimum": 0.01
+          },
+          "price_idr": {
+            "type": "number",
+            "description": "Price for QRIS / bank VA (whole rupiah). Omit to offer crypto only.",
+            "minimum": 1,
+            "maximum": 20000000
           },
           "quota_total": {
             "type": "number",
@@ -3376,6 +3529,19 @@
           "venue_name",
           "price_usd",
           "quota_total"
+        ]
+      },
+      "CheckInDto": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "string",
+            "description": "The QR payload printed on the ticket (THMZ1.<code>.<mac>).",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "payload"
         ]
       },
       "CreateMatchDto": {
