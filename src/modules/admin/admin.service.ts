@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoldSnapshotDto } from './dto/upsert-economy.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 @Injectable()
 export class AdminService {
@@ -13,13 +14,12 @@ export class AdminService {
   ): Promise<{
     data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalid = snapshots.some((s) => !validTeamIds.includes(s.team_id));

@@ -5,6 +5,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ListCommentsDto } from './dto/list-comments.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 export interface MatchComment {
   id: string;
@@ -70,13 +71,12 @@ export class CommentsService {
     user: CurrentUser,
     dto: CreateCommentDto,
   ): Promise<{ data: MatchComment }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { status: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { status: true },
+      }),
+    );
     if (match.status !== 'live') {
       throw new BusinessRuleException(
         'comments are only open while the match is live',
@@ -138,12 +138,11 @@ export class CommentsService {
   }
 
   private async requireMatch(matchId: string): Promise<void> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true },
+      }),
+    );
   }
 }

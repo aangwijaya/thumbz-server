@@ -82,14 +82,68 @@ describe('configuration', () => {
   it('exposes the remaining typed values', () => {
     const config = configuration(validEnv);
     expect(config).toEqual({
+      nodeEnv: 'development',
       port: 3001,
       databaseUrl: validEnv.DATABASE_URL,
       supabaseJwksUrl: validEnv.SUPABASE_JWKS_URL,
       corsOrigins: ['http://localhost:3000'],
+      frontendUrl: 'http://localhost:3000',
+      publicApiUrl: 'http://localhost:3001',
+      trustProxy: 0,
+      logLevel: 'info',
+      metricsToken: null,
+      redisUrl: null,
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,
       nowpaymentsApiBase: 'https://api-sandbox.nowpayments.io',
-      publicApiUrl: 'http://localhost:3001',
     });
+  });
+
+  it('treats blank optional values as unset', () => {
+    const config = configuration({
+      ...validEnv,
+      NOWPAYMENTS_API_KEY: '  ',
+      FRONTEND_URL: '',
+      TRUST_PROXY: '',
+    });
+    expect(config.nowpaymentsApiKey).toBeNull();
+    expect(config.frontendUrl).toBe('http://localhost:3000');
+    expect(config.trustProxy).toBe(0);
+  });
+
+  it('strips trailing slashes from public URLs', () => {
+    const config = configuration({
+      ...validEnv,
+      FRONTEND_URL: 'https://thumbz.example/',
+      PUBLIC_API_URL: 'https://api.thumbz.example//',
+    });
+    expect(config.frontendUrl).toBe('https://thumbz.example');
+    expect(config.publicApiUrl).toBe('https://api.thumbz.example');
+  });
+});
+
+describe('validateEnv in production', () => {
+  const production = { ...validEnv, NODE_ENV: 'production' };
+
+  it('requires PUBLIC_API_URL and FRONTEND_URL', () => {
+    expect(() => validateEnv(production)).toThrow(
+      /PUBLIC_API_URL[\s\S]*FRONTEND_URL/,
+    );
+  });
+
+  it('accepts a complete production environment', () => {
+    expect(() =>
+      validateEnv({
+        ...production,
+        PUBLIC_API_URL: 'https://api.thumbz.example',
+        FRONTEND_URL: 'https://thumbz.example',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-redis REDIS_URL', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, REDIS_URL: 'http://localhost:6379' }),
+    ).toThrow(/REDIS_URL/);
   });
 });

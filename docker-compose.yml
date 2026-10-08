@@ -1,0 +1,60 @@
+# Local stack: `docker compose up -d postgres redis` for tests/dev against
+# `npm run start:dev`, or `docker compose up --build` to run the API image too.
+# Ports match .env.test (Postgres 44322, Redis 6379).
+name: thumbz
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - '44322:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/00-supabase-roles.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    profiles: ['app']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379
+      SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:-https://example.supabase.co/auth/v1/.well-known/jwks.json}
+      CORS_ORIGINS: http://localhost:3000
+      FRONTEND_URL: http://localhost:3000
+      PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - '3001:3001'
+    command: ['sh', '-c', 'npx prisma migrate deploy && node dist/main.js']
+
+volumes:
+  postgres-data:
+  redis-data:

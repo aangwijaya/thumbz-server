@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { MatchEconomyDto } from './dto/match-economy.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 export const SUMMARY_INCLUDE = {
   tournament: { select: { id: true, name: true, slug: true } },
@@ -323,13 +324,12 @@ export class MatchesService {
   }
 
   async get(id: string): Promise<{ data: MatchDetail }> {
-    const row = await this.prisma.match.findUnique({
-      where: { id },
-      include: DETAIL_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        include: DETAIL_INCLUDE,
+      }),
+    );
     return { data: toMatchDetail(row) };
   }
 
@@ -340,13 +340,12 @@ export class MatchesService {
       players: Array<Record<string, unknown>>;
     };
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const teamRows = await this.prisma.matchTeamStatistic.findMany({
       where: { match_id: id },
@@ -413,13 +412,12 @@ export class MatchesService {
   }
 
   async roster(id: string): Promise<{ data: Array<Record<string, unknown>> }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.prisma.playerMatchStatistic.findMany({
       where: { match_id: id },
@@ -461,13 +459,12 @@ export class MatchesService {
   }
 
   async history(id: string): Promise<{ data: MatchSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const rows = await this.prisma.match.findMany({
       where: {
@@ -487,18 +484,17 @@ export class MatchesService {
   }
 
   async related(id: string): Promise<{ data: MatchSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        team_a_id: true,
-        team_b_id: true,
-        tournament_id: true,
-      },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          team_a_id: true,
+          team_b_id: true,
+          tournament_id: true,
+        },
+      }),
+    );
 
     const teamIds = [match.team_a_id, match.team_b_id];
     const candidates = await this.prisma.match.findMany({
@@ -546,13 +542,12 @@ export class MatchesService {
   ): Promise<{
     data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const where: Prisma.MatchGoldSnapshotWhereInput = { match_id: id };
     const recordedAt: Prisma.DateTimeFilter = {};
@@ -583,13 +578,12 @@ export class MatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const where: Prisma.PlayerMatchSnapshotWhereInput = { match_id: id };
     const recordedAt: Prisma.DateTimeFilter = {};
@@ -622,13 +616,12 @@ export class MatchesService {
   async equipment(id: string): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.prisma.matchItemEvent.findMany({
       where: { match_id: id },
@@ -653,13 +646,12 @@ export class MatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const where: Prisma.MatchEventWhereInput = { match_id: id };
     const occurredAt: Prisma.DateTimeFilter = {};
@@ -687,13 +679,12 @@ export class MatchesService {
   }
 
   async broadcasts(id: string): Promise<{ data: BroadcastSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.prisma.matchBroadcast.findMany({
       where: { match_id: id },

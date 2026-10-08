@@ -1,9 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationMeta } from '../../common/utils/pagination';
 import { ListVideosDto } from './dto/list-videos.dto';
 import { VideoSummary, VideosService } from './videos.service';
 
+@ApiTags('videos')
 @Controller('videos')
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}

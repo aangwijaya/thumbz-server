@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
   SUMMARY_SELECT as TOURNAMENT_SUMMARY_SELECT,
@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTournamentDto } from './dto/create-tournament.dto';
 import { UpdateTournamentDto } from './dto/update-tournament.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 @Injectable()
 export class AdminTournamentsService {
@@ -36,13 +37,12 @@ export class AdminTournamentsService {
     id: string,
     dto: UpdateTournamentDto,
   ): Promise<{ data: TournamentSummary }> {
-    const existing = await this.prisma.tournament.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     await this.prisma.tournament.update({
       where: { id },
@@ -70,13 +70,12 @@ export class AdminTournamentsService {
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.tournament.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const matchCount = await this.prisma.match.count({
       where: { tournament_id: id },
@@ -94,13 +93,12 @@ export class AdminTournamentsService {
     value: string,
     key: 'id' | 'slug',
   ): Promise<{ data: TournamentSummary }> {
-    const row = await this.prisma.tournament.findUnique({
-      where: key === 'id' ? { id: value } : { slug: value },
-      select: TOURNAMENT_SUMMARY_SELECT,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: key === 'id' ? { id: value } : { slug: value },
+        select: TOURNAMENT_SUMMARY_SELECT,
+      }),
+    );
     return { data: toTournamentSummary(row) };
   }
 }

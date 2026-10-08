@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
   PLAYER_INCLUDE,
@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlayerDto } from './dto/create-player.dto';
 import { UpdatePlayerDto } from './dto/update-player.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 @Injectable()
 export class AdminPlayersService {
@@ -36,13 +37,12 @@ export class AdminPlayersService {
     id: string,
     dto: UpdatePlayerDto,
   ): Promise<{ data: PlayerSummary }> {
-    const existing = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
     await this.ensureTeamExists(dto.team_id);
 
     await this.prisma.player.update({
@@ -63,13 +63,12 @@ export class AdminPlayersService {
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const statsCount = await this.prisma.playerMatchStatistic.count({
       where: { player_id: id },
@@ -89,26 +88,24 @@ export class AdminPlayersService {
     if (teamId === undefined || teamId === null) {
       return;
     }
-    const team = await this.prisma.team.findUnique({
-      where: { id: teamId },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id: teamId },
+        select: { id: true },
+      }),
+    );
   }
 
   private async getSummary(
     value: string,
     key: 'id' | 'slug',
   ): Promise<{ data: PlayerSummary }> {
-    const row = await this.prisma.player.findUnique({
-      where: key === 'id' ? { id: value } : { slug: value },
-      include: PLAYER_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.player.findUnique({
+        where: key === 'id' ? { id: value } : { slug: value },
+        include: PLAYER_INCLUDE,
+      }),
+    );
     return { data: toPlayerSummary(row) };
   }
 }

@@ -9,6 +9,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { MatchDetail } from '../matches/matches.service';
 import { AdminMatchesService } from './admin-matches.service';
@@ -24,6 +25,8 @@ import { UpsertLiveStatsDto } from './dto/upsert-live-stats.dto';
 import { UpsertBroadcastsDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin/matches')
 export class AdminController {
   constructor(

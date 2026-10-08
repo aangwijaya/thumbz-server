@@ -18,6 +18,7 @@ import { MatchEventDto } from './dto/upsert-events.dto';
 import { BroadcastDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 import { validateCompletedMatch, validateTransition } from './match-state';
+import { orNotFound } from '../../common/utils/not-found';
 
 @Injectable()
 export class AdminMatchesService {
@@ -83,20 +84,19 @@ export class AdminMatchesService {
     id: string,
     dto: UpdateMatchDto,
   ): Promise<{ data: MatchDetail }> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        status: true,
-        team_a_id: true,
-        team_b_id: true,
-        score_a: true,
-        score_b: true,
-        winner_team_id: true,
-      },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const existing = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          team_a_id: true,
+          team_b_id: true,
+          score_a: true,
+          score_b: true,
+          winner_team_id: true,
+        },
+      }),
+    );
 
     const teamA = dto.team_a_id ?? existing.team_a_id;
     const teamB = dto.team_b_id ?? existing.team_b_id;
@@ -183,13 +183,12 @@ export class AdminMatchesService {
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     // statistics rows cascade via the FK (ON DELETE CASCADE)
     await this.prisma.match.delete({ where: { id } });
@@ -213,43 +212,40 @@ export class AdminMatchesService {
     if (tournamentId === undefined || tournamentId === null) {
       return;
     }
-    const tournament = await this.prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { id: true },
-    });
-    if (tournament === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { id: true },
+      }),
+    );
   }
 
   private async getDetail(id: string): Promise<{ data: MatchDetail }> {
-    const row = await this.prisma.match.findUnique({
-      where: { id },
-      include: DETAIL_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        include: DETAIL_INCLUDE,
+      }),
+    );
     return { data: toMatchDetail(row) };
   }
 
   async setLive(id: string, dto: LiveMatchDto): Promise<{ data: MatchDetail }> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        status: true,
-        team_a_id: true,
-        team_b_id: true,
-        score_a: true,
-        score_b: true,
-        winner_team_id: true,
-        started_at: true,
-        ended_at: true,
-      },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const existing = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          team_a_id: true,
+          team_b_id: true,
+          score_a: true,
+          score_b: true,
+          winner_team_id: true,
+          started_at: true,
+          ended_at: true,
+        },
+      }),
+    );
 
     if (dto.status !== undefined) {
       const transitionError = validateTransition(existing.status, dto.status);
@@ -313,13 +309,12 @@ export class AdminMatchesService {
       players: Array<Record<string, unknown>>;
     };
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const teamRows = dto.teams ?? [];
@@ -400,13 +395,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = snapshots.some(
@@ -479,13 +473,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = purchases.some(
@@ -553,13 +546,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = events.some(
@@ -625,13 +617,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<{ language: string; stream_url: string; viewer_count: number }>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const languages = broadcasts.map((b) => b.language);
     if (new Set(languages).size !== languages.length) {

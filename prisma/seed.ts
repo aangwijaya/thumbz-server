@@ -1007,8 +1007,18 @@ async function main(): Promise<void> {
     });
   }
 
-  // optional: create the matching Supabase Auth admin user (local stack)
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  // optional: create the matching Supabase Auth admin user (local stack only:
+  // the demo password is public, so never do this against a hosted project)
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
+  const isLocalSupabase =
+    !!supabaseUrl &&
+    ['localhost', '127.0.0.1'].includes(new URL(supabaseUrl).hostname);
+  if (supabaseUrl && !isLocalSupabase) {
+    console.warn(
+      'Supabase Auth admin user creation skipped (SUPABASE_URL is not local)',
+    );
+  }
+  if (isLocalSupabase && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       const response = await fetch(
         `${process.env.SUPABASE_URL}/auth/v1/admin/users`,

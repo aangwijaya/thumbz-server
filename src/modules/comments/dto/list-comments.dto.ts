@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsISO8601, IsInt, IsOptional, Max, Min } from 'class-validator';
 
@@ -6,6 +7,7 @@ export class ListCommentsDto {
   @IsISO8601()
   after?: string;
 
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 30 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

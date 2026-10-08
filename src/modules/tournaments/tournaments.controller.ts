@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { PaginationMeta } from '../../common/utils/pagination';
@@ -12,6 +13,7 @@ import {
   TournamentsService,
 } from './tournaments.service';
 
+@ApiTags('tournaments')
 @Controller('tournaments')
 export class TournamentsController {
   constructor(private readonly tournamentsService: TournamentsService) {}

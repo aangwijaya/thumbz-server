@@ -11,6 +11,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -32,6 +33,7 @@ import {
 
 type RawBodyRequest = Request & { rawBody?: Buffer };
 
+@ApiTags('matches')
 @Controller('matches')
 export class MatchTicketsController {
   constructor(private readonly tickets: TicketsService) {}
@@ -44,6 +46,7 @@ export class MatchTicketsController {
     return this.tickets.availability(params.id);
   }
 
+  @ApiBearerAuth()
   @Post(':id/orders')
   createOrder(
     @Param() params: MatchIdParamsDto,
@@ -54,6 +57,8 @@ export class MatchTicketsController {
   }
 }
 
+@ApiTags('me')
+@ApiBearerAuth()
 @Controller('me')
 export class MeTicketsController {
   constructor(private readonly tickets: TicketsService) {}
@@ -92,6 +97,8 @@ export class MeTicketsController {
   }
 }
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin')
 export class AdminTicketsController {
   constructor(private readonly tickets: TicketsService) {}
@@ -115,6 +122,7 @@ export class AdminTicketsController {
   }
 }
 
+@ApiTags('webhooks')
 @Controller('webhooks')
 export class PaymentWebhooksController {
   constructor(private readonly tickets: TicketsService) {}

@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { PaginationMeta } from '../../common/utils/pagination';
@@ -7,6 +8,7 @@ import { MatchIdParamsDto } from './dto/match-id-params.dto';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
 import { MatchDetail, MatchSummary, MatchesService } from './matches.service';
+@ApiTags('matches')
 @Controller('matches')
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}

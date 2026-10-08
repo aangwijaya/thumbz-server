@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { player_role, Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -22,6 +22,7 @@ import { roundWinRate } from '../teams/teams.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListPlayersDto } from './dto/list-players.dto';
 import { PlayerMatchesDto } from './dto/player-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 export const PLAYER_INCLUDE = {
   team: { select: SUMMARY_SELECT },
@@ -199,13 +200,12 @@ export class PlayersService {
   }
 
   async get(id: string): Promise<{ data: PlayerDetail }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      include: PLAYER_INCLUDE,
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    const player = orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        include: PLAYER_INCLUDE,
+      }),
+    );
 
     const rows = await this.statRows(id);
     const completed = rows.filter(isCompleted);
@@ -277,13 +277,12 @@ export class PlayersService {
     id: string,
     query: PlayerMatchesDto,
   ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -311,13 +310,12 @@ export class PlayersService {
   }
 
   async statistics(id: string): Promise<{ data: PlayerStatistics }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.statRows(id);
     const completed = rows.filter(isCompleted);

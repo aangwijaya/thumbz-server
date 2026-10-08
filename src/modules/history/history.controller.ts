@@ -9,6 +9,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CurrentUser,
   CurrentUser as CurrentUserPayload,
@@ -19,6 +20,8 @@ import { HistoryMatchParamsDto } from './dto/history-match-params.dto';
 import { UpdateWatchHistoryDto } from './dto/update-watch-history.dto';
 import { HistoryService, WatchHistoryItem } from './history.service';
 
+@ApiTags('me')
+@ApiBearerAuth()
 @Controller('me/history')
 export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}

@@ -35,13 +35,13 @@ describe('WriteThrottlerGuard', () => {
   it('tracks authenticated requests by user id', async () => {
     const guard = buildGuard();
     await expect(
-      guard.getTracker({ user: { sub: 'user-1' }, ip: '1.2.3.4' }),
+      guard['getTracker']({ user: { sub: 'user-1' }, ip: '1.2.3.4' }),
     ).resolves.toBe('user:user-1');
   });
 
   it('tracks anonymous requests by ip', async () => {
     const guard = buildGuard();
-    await expect(guard.getTracker({ ip: '9.9.9.9' })).resolves.toBe(
+    await expect(guard['getTracker']({ ip: '9.9.9.9' })).resolves.toBe(
       'ip:9.9.9.9',
     );
   });

@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AuthModule } from './common/auth/auth.module';
 import { WriteThrottlerGuard } from './common/guards/write-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { configuration, validateEnv } from './config/configuration';
+import { LoggingModule } from './infra/logging/logging.module';
+import { MetricsModule } from './infra/metrics/metrics.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CommentsModule } from './modules/comments/comments.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
@@ -28,9 +29,14 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Tests never read .env: it may point at a shared/cloud database.
+      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
       load: [configuration],
       validate: validateEnv,
     }),
+    LoggingModule,
+    MetricsModule,
+    AuthModule,
     PrismaModule,
     HealthModule,
     UsersModule,
@@ -54,9 +60,7 @@ import { PrismaModule } from './prisma/prisma.module';
       },
     ]),
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

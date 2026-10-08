@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['44322:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # Same values as .env.test; set explicitly so CI never depends on files.
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:44322/postgres
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create Supabase roles referenced by migrations
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/postgres/init.sql
+
+      - run: npx prisma generate
+      - run: npm run lint:check
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: OpenAPI document is up to date
+        run: |
+          node dist/scripts/export-openapi.js
+          git diff --exit-code -- openapi.json || {
+            echo "::error::openapi.json is stale. Run 'npm run openapi:export' and commit it."
+            exit 1
+          }
+
+      - name: Migrate and seed
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+
+      - name: Unit and integration tests
+        run: npm run test:cov -- --runInBand
+
+      - name: E2E tests
+        run: npm run test:e2e -- --runInBand
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: thumbz-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

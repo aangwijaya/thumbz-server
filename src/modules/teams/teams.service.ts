@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { player_role, Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListTeamsDto } from './dto/list-teams.dto';
 import { TeamMatchesDto } from './dto/team-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 export const SUMMARY_SELECT = {
   id: true,
@@ -162,18 +163,17 @@ export class TeamsService {
   }
 
   async get(id: string): Promise<{ data: TeamDetail }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: {
-        ...SUMMARY_SELECT,
-        description: true,
-        founded_year: true,
-        created_at: true,
-      },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    const team = orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: {
+          ...SUMMARY_SELECT,
+          description: true,
+          founded_year: true,
+          created_at: true,
+        },
+      }),
+    );
 
     const involvedWhere: Prisma.MatchWhereInput = {
       OR: [{ team_a_id: id }, { team_b_id: id }],
@@ -234,13 +234,12 @@ export class TeamsService {
     id: string,
     query: TeamMatchesDto,
   ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -274,13 +273,12 @@ export class TeamsService {
   }
 
   async statistics(id: string): Promise<{ data: TeamStatistics }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const involvedWhere: Prisma.MatchWhereInput = {
       OR: [{ team_a_id: id }, { team_b_id: id }],
@@ -345,13 +343,12 @@ export class TeamsService {
   }
 
   async roster(id: string): Promise<{ data: RosterPlayer[] }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     // role order follows the DB enum declaration order, which matches the
     // contract order: gold, mid, exp, jungle, roam, flex, coach

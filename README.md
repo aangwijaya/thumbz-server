@@ -1,6 +1,6 @@
 # thumbz-server
 
-NestJS backend for the THUMBZ esports companion app. Serves the API contract in `../docs/API-CONTRACT.md` against a Supabase PostgreSQL database.
+NestJS backend for the THUMBZ esports companion app. Serves the API contract in [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) against a Supabase PostgreSQL database.
 
 ## Stack
 

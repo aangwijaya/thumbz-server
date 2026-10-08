@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +23,12 @@ import { ListMyOrdersDto } from './dto/list-my-orders.dto';
 import { ListMyTicketsDto } from './dto/list-my-tickets.dto';
 import { TicketConfigDto } from './dto/ticket-config.dto';
 import { NowPaymentsClient } from './nowpayments.client';
+import {
+  isUniqueConstraintViolation,
+  PRISMA_SERIALIZATION_FAILURE,
+  prismaErrorCode,
+} from '../../common/errors/prisma-errors';
+import { orNotFound } from '../../common/utils/not-found';
 
 const HOLD_MINUTES = 30;
 const MAX_PER_USER_PER_MATCH = 4;
@@ -93,22 +98,8 @@ function generateTicketCode(): string {
   return `THMZ-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
 
-function isUniqueConstraintViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2002'
-  );
-}
-
 function isSerializationFailure(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2034'
-  );
+  return prismaErrorCode(error) === PRISMA_SERIALIZATION_FAILURE;
 }
 
 @Injectable()
@@ -122,13 +113,12 @@ export class TicketsService {
   async availability(
     matchId: string,
   ): Promise<{ data: TicketAvailability | null }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { id: true, status: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, status: true },
+      }),
+    );
 
     await this.releaseExpiredHolds(matchId);
 
@@ -236,18 +226,17 @@ export class TicketsService {
       throw new ServiceUnavailableException();
     }
 
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: {
-        id: true,
-        status: true,
-        teamA: { select: { name: true } },
-        teamB: { select: { name: true } },
-      },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: {
+          id: true,
+          status: true,
+          teamA: { select: { name: true } },
+          teamB: { select: { name: true } },
+        },
+      }),
+    );
 
     await this.releaseExpiredHolds(matchId);
 
@@ -307,7 +296,7 @@ export class TicketsService {
     });
 
     const feBase =
-      this.config.get<string[]>('corsOrigins')?.[0] ?? 'http://localhost:3000';
+      this.config.get<string>('frontendUrl') ?? 'http://localhost:3000';
     const apiBase =
       this.config.get<string>('publicApiUrl') ?? 'http://localhost:3001';
     try {
@@ -360,13 +349,12 @@ export class TicketsService {
     user: CurrentUser,
     id: string,
   ): Promise<{ data: TicketOrderView; tickets: MatchTicketView[] }> {
-    const row = await this.prisma.ticketOrder.findFirst({
-      where: { id, user_id: user.sub },
-      include: { tickets: { orderBy: { issued_at: 'asc' } } },
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.ticketOrder.findFirst({
+        where: { id, user_id: user.sub },
+        include: { tickets: { orderBy: { issued_at: 'asc' } } },
+      }),
+    );
     return {
       data: toOrderView(row),
       tickets: row.tickets.map((ticket) => this.toTicketView(ticket)),
@@ -374,13 +362,12 @@ export class TicketsService {
   }
 
   async cancelOrder(user: CurrentUser, id: string): Promise<void> {
-    const row = await this.prisma.ticketOrder.findFirst({
-      where: { id, user_id: user.sub },
-      select: { id: true, status: true },
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.ticketOrder.findFirst({
+        where: { id, user_id: user.sub },
+        select: { id: true, status: true },
+      }),
+    );
     if (row.status === 'paid') {
       throw new BusinessRuleException(
         'paid orders cannot be cancelled; crypto payments are not refunded automatically',
@@ -423,13 +410,12 @@ export class TicketsService {
     matchId: string,
     dto: TicketConfigDto,
   ): Promise<{ data: TicketAvailability }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { id: true, status: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, status: true },
+      }),
+    );
 
     await this.releaseExpiredHolds(matchId);
     const used = await this.usedQuota(matchId);

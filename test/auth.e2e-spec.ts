@@ -63,7 +63,9 @@ describe('Authentication (e2e)', () => {
     const health = await request(app.getHttpServer()).get('/health');
     expect(health.status).toBe(200);
 
-    const catalog = await request(app.getHttpServer()).get('/api/v1');
+    const catalog = await request(app.getHttpServer()).get(
+      '/api/v1/tournaments',
+    );
     expect(catalog.status).toBe(200);
   });
 });
