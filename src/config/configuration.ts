@@ -77,7 +77,7 @@ const envSchema = z
     SUPABASE_JWKS_URL: z
       .string('SUPABASE_JWKS_URL is required and must be an https:// URL')
       .regex(
-        /^https:\/\//,
+        /^https?:\/\//,
         'SUPABASE_JWKS_URL is required and must be an https:// URL',
       ),
     CORS_ORIGINS: z
@@ -131,6 +131,20 @@ const envSchema = z
     NOWPAYMENTS_API_BASE: optional(httpUrl),
   })
   .superRefine((env, ctx) => {
+    // Plain http is only for a local Supabase stack (`supabase start`) in dev.
+    if (env.SUPABASE_JWKS_URL?.startsWith('http://')) {
+      const host = new URL(env.SUPABASE_JWKS_URL).hostname;
+      if (
+        env.NODE_ENV === 'production' ||
+        !['localhost', '127.0.0.1'].includes(host)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SUPABASE_JWKS_URL'],
+          message: 'SUPABASE_JWKS_URL is required and must be an https:// URL',
+        });
+      }
+    }
     if (env.NODE_ENV !== 'production') {
       return;
     }

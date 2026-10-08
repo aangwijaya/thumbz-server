@@ -45,6 +45,20 @@ describe('validateEnv', () => {
     ).toThrow(/SUPABASE_JWKS_URL/);
   });
 
+  it('accepts an http JWKS URL only for a local Supabase stack', () => {
+    const local = 'http://127.0.0.1:54321/auth/v1/.well-known/jwks.json';
+    expect(() =>
+      validateEnv({ ...validEnv, SUPABASE_JWKS_URL: local }),
+    ).not.toThrow();
+    expect(() =>
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        SUPABASE_JWKS_URL: local,
+      }),
+    ).toThrow(/SUPABASE_JWKS_URL/);
+  });
+
   it('rejects an empty CORS_ORIGINS', () => {
     expect(() => validateEnv({ ...validEnv, CORS_ORIGINS: '' })).toThrow(
       /CORS_ORIGINS/,
