@@ -14,6 +14,7 @@ import {
 } from './players.service';
 import { Cached } from '../../infra/cache/cached.decorator';
 import { CacheTags } from '../../infra/cache/cache-tags';
+import { ListMeta } from '../../common/utils/find-page';
 
 @ApiTags('players')
 @Controller('players')
@@ -25,7 +26,7 @@ export class PlayersController {
   @Get()
   list(
     @Query() query: ListPlayersDto,
-  ): Promise<{ data: PlayerSummary[]; meta: PaginationMeta }> {
+  ): Promise<{ data: PlayerSummary[]; meta: ListMeta }> {
     return this.playersService.list(query);
   }
 

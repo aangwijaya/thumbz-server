@@ -14,8 +14,9 @@ const QUIET_PATHS = ['/health', '/health/live', '/health/ready', '/metrics'];
         const nodeEnv = config.get<string>('nodeEnv');
         return {
           pinoHttp: {
+            // Tests are silent unless LOG_LEVEL is set explicitly (debugging).
             level:
-              nodeEnv === 'test'
+              nodeEnv === 'test' && !process.env.LOG_LEVEL
                 ? 'silent'
                 : (config.get<string>('logLevel') ?? 'info'),
             genReqId: assignRequestId,

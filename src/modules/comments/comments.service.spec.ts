@@ -168,13 +168,83 @@ describe('CommentsService (integration, local Postgres)', () => {
     const all = await comments.list(liveMatchId, { limit: 30 });
     expect(all.data.map((c) => c.body)).toEqual(['Dua', 'Satu']);
     expect(all.meta.total).toBe(2);
-    expect(all.meta.next_cursor).toBe(all.data[0]?.created_at.toISOString());
+    expect(all.meta.prev_cursor).toBeNull();
 
     const delta = await comments.list(liveMatchId, {
       limit: 30,
-      after: second.data.created_at.toISOString(),
+      after: all.meta.next_cursor ?? undefined,
     });
     expect(delta.data).toEqual([]);
+    // Polling with no news keeps the caller's position.
+    expect(delta.meta.next_cursor).toBe(all.meta.next_cursor);
+
+    // Legacy clients may still pass an ISO timestamp.
+    const legacy = await comments.list(liveMatchId, {
+      limit: 30,
+      after: second.data.created_at.toISOString(),
+    });
+    expect(legacy.data).toEqual([]);
+  });
+
+  async function seedBurst(count: number, at: Date): Promise<void> {
+    await prisma.matchComment.createMany({
+      data: Array.from({ length: count }, (_, index) => ({
+        match_id: liveMatchId,
+        user_id: OTHER_USER_ID,
+        author_name: 'Burst',
+        body: `b${String(index).padStart(2, '0')}`,
+        // Every comment shares one timestamp: only the id orders them.
+        created_at: at,
+      })),
+    });
+  }
+
+  it('delivers a burst larger than the page over several polls, losing nothing', async () => {
+    await prisma.matchComment.deleteMany({ where: { match_id: liveMatchId } });
+    const start = await comments.list(liveMatchId, { limit: 5 });
+    await seedBurst(12, new Date());
+
+    const received: string[] = [];
+    let cursor = start.meta.next_cursor ?? new Date(0).toISOString();
+    for (let poll = 0; poll < 10; poll += 1) {
+      const page = await comments.list(liveMatchId, {
+        limit: 5,
+        after: cursor,
+      });
+      received.push(...page.data.map((c) => c.id));
+      cursor = page.meta.next_cursor ?? cursor;
+      if (!page.meta.has_more) break;
+    }
+
+    expect(received).toHaveLength(12);
+    expect(new Set(received).size).toBe(12);
+  });
+
+  it('pages back through older comments with before', async () => {
+    await prisma.matchComment.deleteMany({ where: { match_id: liveMatchId } });
+    await seedBurst(7, new Date(Date.now() - 120_000));
+
+    const latest = await comments.list(liveMatchId, { limit: 3 });
+    const seen = latest.data.map((c) => c.id);
+    let before = latest.meta.prev_cursor;
+    while (before !== null) {
+      const older = await comments.list(liveMatchId, { limit: 3, before });
+      seen.push(...older.data.map((c) => c.id));
+      before = older.meta.prev_cursor;
+    }
+
+    expect(seen).toHaveLength(7);
+    expect(new Set(seen).size).toBe(7);
+  });
+
+  it('rejects after and before together', async () => {
+    await expect(
+      comments.list(liveMatchId, {
+        limit: 5,
+        after: new Date().toISOString(),
+        before: new Date().toISOString(),
+      }),
+    ).rejects.toThrow();
   });
 
   it('throws 404 listing comments of an unknown match', async () => {

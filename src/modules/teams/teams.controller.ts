@@ -15,6 +15,7 @@ import {
 } from './teams.service';
 import { Cached } from '../../infra/cache/cached.decorator';
 import { CacheTags } from '../../infra/cache/cache-tags';
+import { ListMeta } from '../../common/utils/find-page';
 
 @ApiTags('teams')
 @Controller('teams')
@@ -26,7 +27,7 @@ export class TeamsController {
   @Get()
   list(
     @Query() query: ListTeamsDto,
-  ): Promise<{ data: TeamSummary[]; meta: PaginationMeta }> {
+  ): Promise<{ data: TeamSummary[]; meta: ListMeta }> {
     return this.teamsService.list(query);
   }
 

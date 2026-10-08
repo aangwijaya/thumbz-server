@@ -20,6 +20,8 @@ export interface AppConfig {
   /** When set, GET /metrics requires `Authorization: Bearer <token>`. */
   metricsToken: string | null;
   redisUrl: string | null;
+  /** Prefix for cache keys in Redis (default "thumbz"). */
+  cacheNamespace: string;
   /** Shared secret for POST {frontendUrl}/api/revalidate; null disables it. */
   revalidateSecret: string | null;
   nowpaymentsApiKey: string | null;
@@ -92,6 +94,11 @@ const envSchema = z
     REDIS_URL: optional(
       z.string().regex(/^rediss?:\/\//, 'REDIS_URL must be a redis:// URL'),
     ),
+    CACHE_NAMESPACE: optional(
+      z
+        .string()
+        .regex(/^[a-z0-9:_-]{1,60}$/i, 'CACHE_NAMESPACE must be [a-z0-9:_-]'),
+    ),
     REVALIDATE_SECRET: optional(
       z.string().min(16, 'REVALIDATE_SECRET must be at least 16 characters'),
     ),
@@ -160,6 +167,7 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: parsed.LOG_LEVEL ?? 'info',
     metricsToken: parsed.METRICS_TOKEN ?? null,
     redisUrl: parsed.REDIS_URL ?? null,
+    cacheNamespace: parsed.CACHE_NAMESPACE ?? 'thumbz',
     revalidateSecret: parsed.REVALIDATE_SECRET ?? null,
     nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,

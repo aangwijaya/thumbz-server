@@ -23,6 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ListPlayersDto } from './dto/list-players.dto';
 import { PlayerMatchesDto } from './dto/player-matches.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const PLAYER_INCLUDE = {
   team: { select: SUMMARY_SELECT },
@@ -122,31 +123,27 @@ export class PlayersService {
 
   async list(
     query: ListPlayersDto,
-  ): Promise<{ data: PlayerSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
-    const sort = query.sort ?? 'nickname';
+  ): Promise<{ data: PlayerSummary[]; meta: ListMeta }> {
     const order = query.order ?? 'asc';
 
     const where: Prisma.PlayerWhereInput = {};
     if (query.team_id) where.team_id = query.team_id;
     if (query.role) where.role = query.role;
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.player.findMany({
-        where,
-        orderBy: { [sort]: order },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: PLAYER_INCLUDE,
-      }),
-      this.prisma.player.count({ where }),
-    ]);
+    const { rows, meta } = await findPage({
+      query,
+      sort: { field: 'nickname', order, type: 'string' },
+      where,
+      findMany: (args) =>
+        this.prisma.player.findMany({
+          ...(args as Prisma.PlayerFindManyArgs),
+          include: PLAYER_INCLUDE,
+        }),
+      count: (filter) => this.prisma.player.count({ where: filter }),
+      sortValue: (row) => row.nickname,
+    });
 
-    return {
-      data: rows.map(toPlayerSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toPlayerSummary), meta };
   }
 
   private async statRows(playerId: string): Promise<StatRow[]> {

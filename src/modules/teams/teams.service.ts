@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ListTeamsDto } from './dto/list-teams.dto';
 import { TeamMatchesDto } from './dto/team-matches.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const SUMMARY_SELECT = {
   id: true,
@@ -127,9 +128,7 @@ export class TeamsService {
 
   async list(
     query: ListTeamsDto,
-  ): Promise<{ data: TeamSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
+  ): Promise<{ data: TeamSummary[]; meta: ListMeta }> {
     const sort = query.sort ?? 'name';
     const order = query.order ?? 'asc';
 
@@ -142,24 +141,23 @@ export class TeamsService {
       ];
     }
 
-    const orderBy: Prisma.TeamOrderByWithRelationInput =
-      sort === 'created_at' ? { created_at: order } : { name: order };
+    const { rows, meta } = await findPage({
+      query,
+      sort:
+        sort === 'created_at'
+          ? { field: 'created_at', order, type: 'date' }
+          : { field: 'name', order, type: 'string' },
+      where,
+      findMany: (args) =>
+        this.prisma.team.findMany({
+          ...(args as Prisma.TeamFindManyArgs),
+          select: { ...SUMMARY_SELECT, created_at: true },
+        }),
+      count: (filter) => this.prisma.team.count({ where: filter }),
+      sortValue: (row) => (sort === 'created_at' ? row.created_at : row.name),
+    });
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.team.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: SUMMARY_SELECT,
-      }),
-      this.prisma.team.count({ where }),
-    ]);
-
-    return {
-      data: rows.map(toTeamSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toTeamSummary), meta };
   }
 
   async get(id: string): Promise<{ data: TeamDetail }> {

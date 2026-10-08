@@ -100,7 +100,11 @@ model Tournament {
 
   matches Match[]
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([status, start_date(sort: Desc)])
+  @@index([search_document], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "tournaments_name_trgm_idx")
   @@map("tournaments")
 }
 
@@ -131,7 +135,11 @@ model Team {
   MatchEvent          MatchEvent[]
   videosWon           Video[]                @relation("VideoWinner")
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([name])
+  @@index([search_document], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "teams_name_trgm_idx")
   @@map("teams")
 }
 
@@ -154,8 +162,12 @@ model Player {
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([team_id])
   @@index([nickname])
+  @@index([search_document], type: Gin)
+  @@index([nickname(ops: raw("gin_trgm_ops"))], type: Gin, map: "players_nickname_trgm_idx")
   @@map("players")
 }
 
@@ -273,10 +285,14 @@ model Video {
   match       Match? @relation(fields: [match_id], references: [id], onDelete: SetNull)
   winningTeam Team?  @relation("VideoWinner", fields: [winning_team_id], references: [id], onDelete: Restrict)
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([type, published_at(sort: Desc)])
   @@index([match_id])
   @@index([winning_team_id])
   @@index([published_at(sort: Desc)])
+  @@index([search_document], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "videos_title_trgm_idx")
   @@map("videos")
 }
 

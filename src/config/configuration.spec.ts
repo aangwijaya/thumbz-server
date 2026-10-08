@@ -93,6 +93,7 @@ describe('configuration', () => {
       logLevel: 'info',
       metricsToken: null,
       redisUrl: null,
+      cacheNamespace: 'thumbz',
       revalidateSecret: null,
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,

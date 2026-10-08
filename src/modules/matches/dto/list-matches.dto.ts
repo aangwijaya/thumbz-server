@@ -8,12 +8,12 @@ import {
   IsUUID,
 } from 'class-validator';
 import { match_status } from '@prisma/client';
-import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
+import { CursorPageQueryDto } from '../../../common/dto/pagination.dto';
 
 const SORT_KEYS = ['scheduled_at', 'viewer_count'] as const;
 const ORDERS = ['asc', 'desc'] as const;
 
-export class ListMatchesDto extends PaginationQueryDto {
+export class ListMatchesDto extends CursorPageQueryDto {
   @IsOptional()
   @IsEnum(match_status)
   status?: match_status;

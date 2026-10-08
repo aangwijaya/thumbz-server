@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  PaginationMeta,
-  buildPaginationMeta,
-} from '../../common/utils/pagination';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListVideosDto } from './dto/list-videos.dto';
 
@@ -65,28 +62,24 @@ export class VideosService {
 
   async list(
     query: ListVideosDto,
-  ): Promise<{ data: VideoSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
-
+  ): Promise<{ data: VideoSummary[]; meta: ListMeta }> {
     const where: Prisma.VideoWhereInput = {};
     if (query.type) where.type = query.type;
     if (query.match_id) where.match_id = query.match_id;
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.video.findMany({
-        where,
-        orderBy: { published_at: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: VIDEO_INCLUDE,
-      }),
-      this.prisma.video.count({ where }),
-    ]);
+    const { rows, meta } = await findPage({
+      query,
+      sort: { field: 'published_at', order: 'desc', type: 'date' },
+      where,
+      findMany: (args) =>
+        this.prisma.video.findMany({
+          ...(args as Prisma.VideoFindManyArgs),
+          include: VIDEO_INCLUDE,
+        }),
+      count: (filter) => this.prisma.video.count({ where: filter }),
+      sortValue: (row) => row.published_at,
+    });
 
-    return {
-      data: rows.map(toVideoSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toVideoSummary), meta };
   }
 }

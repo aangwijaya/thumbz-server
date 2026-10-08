@@ -9,6 +9,7 @@ import { ListMatchesDto } from './dto/list-matches.dto';
 import { MatchEconomyDto } from './dto/match-economy.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
 import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const SUMMARY_INCLUDE = {
   tournament: { select: { id: true, name: true, slug: true } },
@@ -217,9 +218,7 @@ export class MatchesService {
 
   async list(
     query: ListMatchesDto,
-  ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
+  ): Promise<{ data: MatchSummary[]; meta: ListMeta }> {
     const sort = query.sort ?? 'scheduled_at';
     const order = query.order ?? 'asc';
 
@@ -237,26 +236,24 @@ export class MatchesService {
       where.scheduled_at = scheduledAt;
     }
 
-    const orderBy: Prisma.MatchOrderByWithRelationInput =
-      sort === 'viewer_count'
-        ? { viewer_count: order }
-        : { scheduled_at: order };
+    const { rows, meta } = await findPage({
+      query,
+      sort:
+        sort === 'viewer_count'
+          ? { field: 'viewer_count', order, type: 'number' }
+          : { field: 'scheduled_at', order, type: 'date' },
+      where,
+      findMany: (args) =>
+        this.prisma.match.findMany({
+          ...(args as Prisma.MatchFindManyArgs),
+          include: SUMMARY_INCLUDE,
+        }),
+      count: (filter) => this.prisma.match.count({ where: filter }),
+      sortValue: (row) =>
+        sort === 'viewer_count' ? row.viewer_count : row.scheduled_at,
+    });
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.match.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: SUMMARY_INCLUDE,
-      }),
-      this.prisma.match.count({ where }),
-    ]);
-
-    return {
-      data: rows.map(toMatchSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toMatchSummary), meta };
   }
 
   async live(

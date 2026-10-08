@@ -10,6 +10,7 @@ import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
 import { MatchDetail, MatchSummary, MatchesService } from './matches.service';
 import { Cached } from '../../infra/cache/cached.decorator';
 import { CacheTags } from '../../infra/cache/cache-tags';
+import { ListMeta } from '../../common/utils/find-page';
 @ApiTags('matches')
 @Controller('matches')
 export class MatchesController {
@@ -20,7 +21,7 @@ export class MatchesController {
   @Get()
   list(
     @Query() query: ListMatchesDto,
-  ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
+  ): Promise<{ data: MatchSummary[]; meta: ListMeta }> {
     return this.matchesService.list(query);
   }
 

@@ -1,10 +1,22 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ThrottlerException } from '@nestjs/throttler';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ListCommentsDto } from './dto/list-comments.dto';
+import {
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
+  SortSpec,
+} from '../../common/utils/cursor';
 import { orNotFound } from '../../common/utils/not-found';
 import { DomainEvents } from '../../infra/events/domain-events';
 import { REDIS } from '../../infra/redis/redis.constants';
@@ -30,6 +42,60 @@ const COMMENT_SELECT = {
 
 const COMMENT_COOLDOWN_MS = 3_000;
 
+const COMMENT_SORT: SortSpec = {
+  field: 'created_at',
+  order: 'desc',
+  type: 'date',
+};
+
+type CommentRow = MatchComment;
+
+export interface CommentsMeta {
+  /** Pass as `after` to receive only newer comments. */
+  next_cursor: string | null;
+  /** Pass as `before` to page back through older comments; null at the start. */
+  prev_cursor: string | null;
+  /** With `after`: more new comments are waiting — fetch again right away. */
+  has_more: boolean;
+  total: number;
+}
+
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T/;
+
+/** Position of a cursor; legacy `after` timestamps have no id tie-breaker. */
+function position(raw: string): { value: Date; id: string | null } {
+  if (ISO_TIMESTAMP.test(raw)) {
+    const value = new Date(raw);
+    if (Number.isNaN(value.getTime())) {
+      throw new BadRequestException({
+        details: [
+          { field: 'after', message: 'after must be a cursor or ISO date' },
+        ],
+      });
+    }
+    return { value, id: null };
+  }
+  const cursor = decodeCursor(raw, COMMENT_SORT);
+  return { value: cursor.value as Date, id: cursor.id };
+}
+
+function newerThan(raw: string): Prisma.MatchCommentWhereInput {
+  const { value, id } = position(raw);
+  return id === null
+    ? { created_at: { gt: value } }
+    : keysetWhere({ ...COMMENT_SORT, order: 'asc' }, { value, id });
+}
+
+function olderThan(raw: string): Prisma.MatchCommentWhereInput {
+  const { value, id } = position(raw);
+  return id === null
+    ? { created_at: { lt: value } }
+    : keysetWhere(COMMENT_SORT, {
+        value,
+        id,
+      });
+}
+
 @Injectable()
 export class CommentsService {
   constructor(
@@ -41,33 +107,62 @@ export class CommentsService {
   async list(
     matchId: string,
     query: ListCommentsDto,
-  ): Promise<{
-    data: MatchComment[];
-    meta: { next_cursor: string | null; total: number };
-  }> {
+  ): Promise<{ data: MatchComment[]; meta: CommentsMeta }> {
+    if (query.after !== undefined && query.before !== undefined) {
+      throw new BadRequestException({
+        details: [
+          { field: 'after', message: 'use either after or before, not both' },
+        ],
+      });
+    }
     await this.requireMatch(matchId);
+    const limit = query.limit;
+    const base = { match_id: matchId };
 
-    const where = {
-      match_id: matchId,
-      ...(query.after !== undefined
-        ? { created_at: { gt: new Date(query.after) } }
-        : {}),
-    };
+    let rows: CommentRow[];
+    let hasMore = false;
+    let hasOlder = false;
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.matchComment.findMany({
-        where,
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        take: query.limit,
+    if (query.after !== undefined) {
+      // Oldest-first after the cursor, so a burst larger than `limit` is
+      // delivered over several polls instead of skipping the middle.
+      const fetched = await this.prisma.matchComment.findMany({
+        where: { AND: [base, newerThan(query.after)] },
+        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+        take: limit + 1,
         select: COMMENT_SELECT,
-      }),
-      this.prisma.matchComment.count({ where: { match_id: matchId } }),
-    ]);
+      });
+      hasMore = fetched.length > limit;
+      rows = fetched.slice(0, limit).reverse();
+    } else {
+      const fetched = await this.prisma.matchComment.findMany({
+        where:
+          query.before !== undefined
+            ? { AND: [base, olderThan(query.before)] }
+            : base,
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        select: COMMENT_SELECT,
+      });
+      hasOlder = fetched.length > limit;
+      rows = fetched.slice(0, limit);
+    }
 
+    const total = await this.prisma.matchComment.count({ where: base });
+    const newest = rows[0];
+    const oldest = rows[rows.length - 1];
     return {
       data: rows.map((row) => ({ ...row })),
       meta: {
-        next_cursor: rows[0]?.created_at.toISOString() ?? null,
+        // No new rows: keep polling from where the caller already is.
+        next_cursor: newest
+          ? encodeCursor(COMMENT_SORT, newest.created_at, newest.id)
+          : (query.after ?? null),
+        prev_cursor:
+          hasOlder && oldest
+            ? encodeCursor(COMMENT_SORT, oldest.created_at, oldest.id)
+            : null,
+        has_more: hasMore,
         total,
       },
     };

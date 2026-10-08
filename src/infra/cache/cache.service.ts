@@ -1,13 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import { MetricsService } from '../metrics/metrics.service';
 import { REDIS } from '../redis/redis.constants';
 
-const PREFIX = 'thumbz:';
-const VALUE_PREFIX = `${PREFIX}cache:`;
-const TAG_PREFIX = `${PREFIX}tag:`;
-const LOCK_PREFIX = `${PREFIX}lock:`;
+const DEFAULT_NAMESPACE = 'thumbz';
 
 /** Tag sets outlive their members; stale members are harmless (DEL no-ops). */
 const TAG_TTL_SECONDS = 24 * 60 * 60;
@@ -56,15 +54,27 @@ export class CacheService {
   private readonly inFlight = new Map<string, Promise<unknown>>();
   private readonly requests;
 
+  private readonly valuePrefix: string;
+  private readonly tagPrefix: string;
+  private readonly lockPrefix: string;
+
   constructor(
     @Inject(REDIS) private readonly redis: Redis | null,
     metrics: MetricsService,
+    @Optional() config?: ConfigService,
   ) {
     this.requests = metrics.counter(
       'thumbz_cache_requests_total',
       'Cache lookups by result',
       ['result'],
     );
+    // Namespacing lets several environments (or parallel test suites) share
+    // one Redis without reading each other's entries.
+    const namespace =
+      config?.get<string>('cacheNamespace') ?? DEFAULT_NAMESPACE;
+    this.valuePrefix = `${namespace}:cache:`;
+    this.tagPrefix = `${namespace}:tag:`;
+    this.lockPrefix = `${namespace}:lock:`;
   }
 
   private get available(): boolean {
@@ -107,7 +117,7 @@ export class CacheService {
             this.redis!.eval(
               INVALIDATE_TAG_SCRIPT,
               1,
-              `${TAG_PREFIX}${tag}`,
+              `${this.tagPrefix}${tag}`,
             ) as Promise<number>,
         ),
       );
@@ -124,14 +134,14 @@ export class CacheService {
     loader: () => Promise<T>,
     tags: string[],
   ): Promise<{ value: T; result: CacheResult }> {
-    const valueKey = `${VALUE_PREFIX}${key}`;
+    const valueKey = `${this.valuePrefix}${key}`;
     const cached = await this.read<T>(valueKey);
     if (cached !== undefined) {
       this.requests.inc({ result: 'hit' });
       return { value: cached, result: 'hit' };
     }
 
-    const lockKey = `${LOCK_PREFIX}${key}`;
+    const lockKey = `${this.lockPrefix}${key}`;
     const token = randomUUID();
     const locked = await this.tryLock(lockKey, token);
     if (!locked) {
@@ -201,7 +211,7 @@ export class CacheService {
         ttl,
       );
       for (const tag of new Set(tags)) {
-        const tagKey = `${TAG_PREFIX}${tag}`;
+        const tagKey = `${this.tagPrefix}${tag}`;
         tx.sadd(tagKey, valueKey).expire(tagKey, TAG_TTL_SECONDS);
       }
       await tx.exec();

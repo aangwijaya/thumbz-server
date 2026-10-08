@@ -33,8 +33,14 @@ describe('Me (e2e, authenticated)', () => {
     prisma = app.get(PrismaService);
 
     token = await signTestToken(userId, { name: 'E2E Viewer' });
-    const team = await prisma.team.findFirstOrThrow({ select: { id: true } });
+    // Seeded rows only: fixtures from parallel suites may vanish mid-test.
+    const seeded = { slug: { not: { startsWith: 'e2e' } } };
+    const team = await prisma.team.findFirstOrThrow({
+      where: seeded,
+      select: { id: true },
+    });
     const match = await prisma.match.findFirstOrThrow({
+      where: { teamA: seeded, teamB: seeded },
       select: { id: true },
     });
     teamId = team.id;

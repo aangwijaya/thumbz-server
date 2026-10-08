@@ -77,12 +77,18 @@ Three effective roles:
 
 ### 4.1 Pagination
 
-All list endpoints support:
+All list endpoints support offset paging:
 
 | Param | Type | Default | Constraint |
 | --- | --- | --- | --- |
-| `page` | integer | `1` | `>= 1` |
+| `page` | integer | `1` | `1..500` (deep offsets get slower; page further with `cursor`) |
 | `pageSize` | integer | `20` | `1..50` |
+
+`/matches`, `/videos`, `/teams` and `/players` also support **keyset paging** for infinite scroll:
+
+| Param | Type | Notes |
+| --- | --- | --- |
+| `cursor` | string | opaque; pass back `meta.next_cursor`. When present, `page` is ignored and no total is computed. A cursor is bound to the `sort`/`order` it was issued for; reusing it with another ordering → `400 VALIDATION_ERROR` (`field: "cursor"`). |
 
 Response envelope:
 
@@ -93,10 +99,16 @@ Response envelope:
     "page": 1,
     "pageSize": 20,
     "total": 137,
-    "totalPages": 7
+    "totalPages": 7,
+    "next_cursor": "eyJmIjoi… | null",
+    "has_more": true
   }
 }
 ```
+
+- Offset responses also carry `next_cursor`, so a client can render page 1 normally and continue with cursors.
+- In cursor mode `page`, `total` and `totalPages` are `null`.
+- Ordering is always deterministic: the sort key, then `id` as a tie-breaker.
 
 ### 4.2 Filtering
 
@@ -512,25 +524,19 @@ Clients derive current rankings/latest values themselves (the endpoint is a raw,
 
 | Param | Type | Notes |
 | --- | --- | --- |
-| `after` | ISO datetime | optional; only comments created strictly after this timestamp (incremental polling) |
+| `after` | cursor | optional; only newer comments — pass `meta.next_cursor` (an ISO timestamp is still accepted for older clients) |
+| `before` | cursor | optional; only older comments — pass `meta.prev_cursor` (scroll-back). Not combinable with `after` |
 | `limit` | int 1..50 | optional, default `30` |
 
-**Response:** `{ "data": [MatchComment], "meta": { "next_cursor": "ISO datetime | null", "total": 0 } }`
+**Response:** `{ "data": [MatchComment], "meta": { "next_cursor": "…", "prev_cursor": "… | null", "has_more": false, "total": 137 } }`
 
-```json
-{
-  "data": [
-    { "id": "uuid", "match_id": "uuid", "user_id": "uuid", "author_name": "Raka",
-      "body": "RRQ setup-nya bagus", "created_at": "2026-09-05T12:15:00Z" }
-  ],
-  "meta": { "next_cursor": "2026-09-05T12:15:00Z", "total": 137 }
-}
-```
-
-- Always ordered `created_at` desc (newest first). With `after`, the client prepends the returned items.
-- `meta.next_cursor` = `created_at` of the newest returned comment (`null` when empty) — pass it as the next `after` to get only newer comments. Poll on a ~5s cadence while the panel is visible; never with a shorter interval.
+- `data` is always newest first.
+- Cursors are opaque and encode `(created_at, id)`, so comments sharing a timestamp are never skipped.
+- With `after`, the oldest `limit` newer comments are returned (still newest-first in `data`); `has_more: true` means more are waiting — fetch again immediately. A burst larger than `limit` therefore arrives over consecutive calls with nothing lost. With no news, `next_cursor` echoes the cursor you sent.
+- `prev_cursor` is `null` once the start of the chat is reached.
+- Live updates are also pushed over WebSocket (see realtime section); polling remains the fallback. Never poll faster than ~5 s.
 - Comments are immutable; there is no edit. Deleted comments disappear from the series.
-- **Errors:** `404 NOT_FOUND` when the match does not exist.
+- **Errors:** `404 NOT_FOUND` when the match does not exist; `400` for an invalid cursor or `after` + `before` together.
 
 #### `POST /matches/:id/comments`
 
@@ -986,10 +992,27 @@ Each `upcoming` item carries its venue `ticket` availability inline (`null` when
 }
 ```
 
-- Matching: case-insensitive substring (`ILIKE '%q%'`) on `name`/`nickname`/`real_name`/`title`/`slug`. No full-text index in MVP.
-- `total` = sum of match counts across the searched entity types.
+- `meta.counts` gives per-type totals (`{ "matches": 3, "teams": 1, ... }`) for result tabs; `meta.total` is their sum.
+- Matching (Postgres): a row matches when its full-text document matches every query token as a prefix (`onic ph` → `onic:* & ph:*`), when the label contains `q` (trigram-indexed `ILIKE`), or when the label is similar to `q` (trigram similarity, tolerates typos like `onik`). Documents: teams = name + short name + slug; players = nickname + real name + slug; tournaments = name + slug; videos = title.
+- Ranking: exact label/slug match, then label prefix, then `ts_rank`, then similarity; ties by label. Paging happens in SQL.
+- Matches are found through matching teams (A or B) and tournaments, newest first.
 - When `type` is set, only that key is populated; the others are `[]`.
-- Matches search on team names (A or B) and tournament name; players search on nickname/real_name; videos search on title; results ordered by relevance heuristic: exact slug match first, then prefix match, then substring, then name asc.
+
+#### `GET /search/suggest`
+
+**Purpose:** typeahead for the header search box. Public, cached 60 s.
+
+| Param | Type | Notes |
+| --- | --- | --- |
+| `q` | string | required, 1–100 chars |
+| `limit` | int 1..10 | default `8` |
+
+**Response:** `{ "data": [SearchSuggestion] }`, interleaving the best teams, players and tournaments:
+
+```json
+{ "type": "team | player | tournament", "id": "uuid", "slug": "onic",
+  "label": "ONIC Esports", "sublabel": "Indonesia", "image_url": "https://… | null" }
+```
 
 ### 6.8 Me — profile, favorites, history
 
