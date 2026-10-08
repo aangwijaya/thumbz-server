@@ -158,27 +158,30 @@ export class TicketsService {
       return result;
     }
     const now = new Date();
-    const configs = await this.prisma.matchTicketConfig.findMany({
-      where: { match_id: { in: matchIds } },
-    });
-    const matches = await this.prisma.match.findMany({
-      where: { id: { in: matchIds } },
-      select: { id: true, status: true },
-    });
-    const ticketCounts = await this.prisma.ticket.groupBy({
-      by: ['match_id'],
-      where: { match_id: { in: matchIds } },
-      _count: true,
-    });
-    const holds = await this.prisma.ticketOrder.groupBy({
-      by: ['match_id'],
-      where: {
-        match_id: { in: matchIds },
-        status: 'pending',
-        expires_at: { gt: now },
-      },
-      _sum: { quantity: true },
-    });
+    // Independent reads: run them concurrently, not one after another.
+    const [configs, matches, ticketCounts, holds] = await Promise.all([
+      this.prisma.matchTicketConfig.findMany({
+        where: { match_id: { in: matchIds } },
+      }),
+      this.prisma.match.findMany({
+        where: { id: { in: matchIds } },
+        select: { id: true, status: true },
+      }),
+      this.prisma.ticket.groupBy({
+        by: ['match_id'],
+        where: { match_id: { in: matchIds } },
+        _count: true,
+      }),
+      this.prisma.ticketOrder.groupBy({
+        by: ['match_id'],
+        where: {
+          match_id: { in: matchIds },
+          status: 'pending',
+          expires_at: { gt: now },
+        },
+        _sum: { quantity: true },
+      }),
+    ]);
     const configByMatch = new Map(configs.map((c) => [c.match_id, c]));
     const statusByMatch = new Map(matches.map((m) => [m.id, m.status]));
     const soldByMatch = new Map(
