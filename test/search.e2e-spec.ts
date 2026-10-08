@@ -170,6 +170,37 @@ describe('Search (e2e)', () => {
     expect(body.data.matches.map((m) => m.id)).toContain(matchAId);
   });
 
+  it('tolerates typos (trigram word similarity)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/search?q=zebraa&type=team')
+      .expect(200);
+    const body = response.body as {
+      data: { teams: Array<{ id: string }> };
+      meta: { counts: { teams: number } };
+    };
+    expect(body.data.teams.map((t) => t.id)).toContain(teamContainsId);
+    expect(body.meta.counts.teams).toBeGreaterThanOrEqual(1);
+  });
+
+  it('treats tsquery syntax in q as plain text', async () => {
+    await request(app.getHttpServer())
+      .get(`/api/v1/search?q=${encodeURIComponent("e2esearch & !(x) | ':*")}`)
+      .expect(200);
+  });
+
+  it('suggests teams, players and tournaments for the typeahead', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/search/suggest?q=e2esearch&limit=5')
+      .expect(200);
+    const body = response.body as {
+      data: Array<{ type: string; id: string; label: string }>;
+    };
+    expect(body.data.length).toBeLessThanOrEqual(5);
+    expect(new Set(body.data.map((item) => item.type))).toEqual(
+      new Set(['team', 'player', 'tournament']),
+    );
+  });
+
   it('clamps pageSize to 20 for search', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/v1/search?q=e2esearch&pageSize=30')

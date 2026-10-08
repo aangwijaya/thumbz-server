@@ -93,6 +93,9 @@ const ALL_TYPES: Array<Exclude<SearchType, 'all'>> = [
   'video',
 ];
 
+/** Minimum word_similarity for a typo match (pg_trgm default is 0.6). */
+const WORD_SIMILARITY_THRESHOLD = 0.5;
+
 /** Candidate teams/tournaments considered when searching matches by name. */
 const MATCH_ENTITY_CANDIDATES = 50;
 
@@ -322,7 +325,8 @@ export class SearchService {
       [
         ...(tsquery ? [Prisma.sql`search_document @@ ${tsquery}`] : []),
         Prisma.sql`${label} ILIKE ${terms.contains}`,
-        Prisma.sql`${label} % ${terms.q}`,
+        // Typo-tolerant: q is similar to some word run inside the label.
+        Prisma.sql`${terms.q} <% ${label}`,
       ],
       ' OR ',
     );
@@ -333,10 +337,15 @@ export class SearchService {
       CASE WHEN ${exact} THEN 4 ELSE 0 END
       + CASE WHEN ${label} ILIKE ${terms.prefix} THEN 2 ELSE 0 END
       + ${tsquery ? Prisma.sql`ts_rank(search_document, ${tsquery})` : Prisma.sql`0`}
-      + similarity(${label}, ${terms.q})
+      + word_similarity(${terms.q}, ${label})
+      + similarity(${label}, ${terms.q}) * 0.5
     )`;
 
-    const [rows, counted] = await Promise.all([
+    // One connection, one transaction: SET LOCAL scopes the threshold to
+    // these queries (default 0.6 misses one-letter typos like "onik").
+    const [, rows, counted] = await this.prisma.$transaction([
+      this.prisma
+        .$executeRaw`SET LOCAL pg_trgm.word_similarity_threshold = ${Prisma.raw(String(WORD_SIMILARITY_THRESHOLD))}`,
       this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM ${table}
         WHERE ${where}
@@ -345,7 +354,9 @@ export class SearchService {
       withTotal
         ? this.prisma.$queryRaw<Array<{ total: bigint }>>`
             SELECT count(*) AS total FROM ${table} WHERE ${where}`
-        : Promise.resolve([{ total: 0n }]),
+        : this.prisma.$queryRaw<
+            Array<{ total: bigint }>
+          >`SELECT 0::bigint AS total`,
     ]);
     return {
       ids: rows.map((row) => row.id),
