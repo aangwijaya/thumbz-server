@@ -607,6 +607,40 @@ export class TicketsService {
     return this.acknowledge(order.match_id);
   }
 
+  /**
+   * Expires pending orders whose hold ran out (scheduled job). Holds were
+   * previously only released lazily on the next checkout of that match, so
+   * GET /me/orders/:id kept answering "pending" after expires_at.
+   */
+  async expireStaleHolds(now = new Date(), batch = 500): Promise<number> {
+    const stale = await this.prisma.ticketOrder.findMany({
+      where: { status: 'pending', expires_at: { lt: now } },
+      select: { id: true, match_id: true, user_id: true },
+      take: batch,
+    });
+    if (stale.length === 0) {
+      return 0;
+    }
+    const expired = await this.prisma.ticketOrder.updateMany({
+      // Re-check the status: a payment may have landed in between.
+      where: { id: { in: stale.map((order) => order.id) }, status: 'pending' },
+      data: { status: 'expired' },
+    });
+    for (const order of stale) {
+      this.events.emit({
+        type: 'order.changed',
+        orderId: order.id,
+        userId: order.user_id,
+        matchId: order.match_id,
+        status: 'expired',
+      });
+    }
+    for (const matchId of new Set(stale.map((order) => order.match_id))) {
+      this.events.emit({ type: 'tickets.changed', matchId });
+    }
+    return expired.count;
+  }
+
   /** Availability changed for the match: tell caches and listeners. */
   private acknowledge(matchId: string): { ok: true } {
     this.events.emit({ type: 'tickets.changed', matchId });

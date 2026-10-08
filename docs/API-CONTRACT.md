@@ -1566,3 +1566,18 @@ Limits: 5 rooms per socket; more than 30 messages per 10 s disconnects the socke
 Polling (§11) remains the fallback while the socket is disconnected; clients stop polling once connected and subscribed.
 
 **Demo:** with `LIVE_SIMULATOR=true` the API keeps seeded live matches "playing" (gold, kills, objectives, item buys, viewer drift) through the regular ingestion services, so every layer — cache invalidation, domain events, realtime fan-out — runs as in production.
+
+---
+
+## 15. Background jobs
+
+A separate **worker** process (`node dist/worker.js`, same image as the API, no HTTP server) runs BullMQ jobs from Redis. Recurring jobs are BullMQ job schedulers (idempotent upserts), so each occurrence runs on exactly one worker however many are deployed.
+
+| Job | Schedule | Effect |
+| --- | --- | --- |
+| `expire-holds` | every 60 s | Pending ticket orders past `expires_at` become `expired`; pushes `order:update` to the buyer and `tickets:changed` to the match room; availability caches drop |
+| `live-simulator` | every `LIVE_SIMULATOR_INTERVAL_MS` (only with `LIVE_SIMULATOR=true`) | Advances the seeded live matches (§14) |
+
+Jobs retry with exponential backoff (3 attempts; the simulator never retries). Events emitted in the worker reach browsers through Redis (`@socket.io/redis-emitter` → API instances' sockets), invalidate the Redis cache directly and trigger frontend revalidation.
+
+`GET /api/v1/admin/jobs` (admin): `{ data: { enabled, counts: { waiting, active, delayed, completed, failed }, schedulers: [{ id, every, next }], recent_failures: [...] } }`. Queue depth is also exported as `thumbz_queue_jobs{state}` on `/metrics`.

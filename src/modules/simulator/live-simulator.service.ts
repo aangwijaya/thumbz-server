@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 import { AdminMatchesService } from '../admin/admin-matches.service';
 import { AdminService } from '../admin/admin.service';
 import { MatchEventDto } from '../admin/dto/upsert-events.dto';
@@ -36,40 +30,24 @@ interface MatchSim {
 }
 
 /**
- * Demo mode (LIVE_SIMULATOR=true): makes the seeded live matches "play" —
+ * Demo mode (LIVE_SIMULATOR=true, ticked by the worker's live-simulator
+ * job): makes the seeded live matches "play" —
  * gold, kills, objectives, item buys — through the same ingestion services
  * the admin API uses, so caching, domain events and the realtime channel
  * are exercised exactly as in production.
  */
 @Injectable()
-export class LiveSimulatorService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class LiveSimulatorService {
   private readonly logger = new Logger(LiveSimulatorService.name);
   private readonly sims = new Map<string, MatchSim>();
   private readonly rand = seededRandom(Date.now() % 2 ** 31);
-  private timer: NodeJS.Timeout | null = null;
   private running = false;
 
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly matches: AdminMatchesService,
     private readonly economy: AdminService,
   ) {}
-
-  onApplicationBootstrap(): void {
-    if (!this.config.get<boolean>('liveSimulator')) return;
-    const interval =
-      this.config.get<number>('liveSimulatorIntervalMs') ?? 5_000;
-    this.timer = setInterval(() => void this.step(), interval);
-    this.timer.unref();
-    this.logger.log(`live simulator on (every ${interval} ms)`);
-  }
-
-  onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
-  }
 
   /** One tick for every live match. Overlapping ticks are skipped. */
   async step(): Promise<void> {
@@ -132,7 +110,7 @@ export class LiveSimulatorService
 
     if (result.purchase) {
       const pool = ITEMS[result.purchase.phase];
-      const item = pool[Math.floor(this.rand() * pool.length)]!;
+      const item = pool[Math.floor(this.rand() * pool.length)];
       await this.matches.upsertEquipment(matchId, [
         {
           player_id: result.purchase.player.player_id,

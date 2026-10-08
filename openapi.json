@@ -3277,6 +3277,25 @@
           "admin"
         ]
       }
+    },
+    "/api/v1/admin/jobs": {
+      "get": {
+        "operationId": "Jobs_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
     }
   },
   "info": {

@@ -5,5 +5,6 @@ import { LiveSimulatorService } from './live-simulator.service';
 @Module({
   imports: [AdminModule],
   providers: [LiveSimulatorService],
+  exports: [LiveSimulatorService],
 })
 export class SimulatorModule {}

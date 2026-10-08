@@ -20,6 +20,7 @@ import {
   RealtimeEvents,
   Rooms,
 } from './realtime.constants';
+import { RealtimePublisher } from './realtime-publisher';
 import { SequencerService } from './sequencer.service';
 
 interface SocketData {
@@ -50,6 +51,7 @@ const VIEWER_BROADCAST_MS = 15_000;
  */
 @WebSocketGateway({ namespace: '/rt' })
 export class RealtimeGateway
+  extends RealtimePublisher
   implements
     OnGatewayInit,
     OnGatewayConnection,
@@ -69,6 +71,7 @@ export class RealtimeGateway
     private readonly sequencer: SequencerService,
     metrics: MetricsService,
   ) {
+    super();
     this.connections = metrics.gauge(
       'thumbz_ws_connections',
       'Open realtime connections on this instance',

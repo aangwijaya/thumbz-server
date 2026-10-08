@@ -36,6 +36,7 @@ export function tagsForEvent(event: DomainEvent): string[] {
       return [CacheTags.tickets(event.matchId)];
     case 'comment.created':
     case 'comment.deleted':
+    case 'order.changed':
       return [];
   }
 }

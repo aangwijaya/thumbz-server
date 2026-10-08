@@ -47,7 +47,7 @@ export interface TickResult {
 }
 
 const pick = <T>(rand: Rand, items: T[]): T =>
-  items[Math.floor(rand() * items.length)] as T;
+  items[Math.floor(rand() * items.length)];
 
 const OBJECTIVES: Array<Objective['event_type']> = [
   'turtle',
@@ -113,11 +113,11 @@ export function tick(
     gold[team] = (gold[team] ?? 0) + (type === 'lord' ? 1200 : 600);
   }
 
-  const purchase =
+  const purchase: TickResult['purchase'] =
     players.length > 0 && rand() < 0.3
       ? {
           player: pick(rand, players),
-          phase: (rand() < 0.5 ? 'phase2' : 'phase3') as 'phase2' | 'phase3',
+          phase: rand() < 0.5 ? 'phase2' : 'phase3',
         }
       : null;
 

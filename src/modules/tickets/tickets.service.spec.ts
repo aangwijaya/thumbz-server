@@ -21,6 +21,7 @@ describe('TicketsService (integration, local Postgres)', () => {
     verifyIpn: jest.Mock;
   };
   let tickets: TicketsService;
+  let events: ReturnType<typeof testEvents>;
 
   let teamAId: string;
   let teamBId: string;
@@ -41,11 +42,12 @@ describe('TicketsService (integration, local Postgres)', () => {
       corsOrigins: ['http://localhost:3000'],
       frontendUrl: 'http://localhost:3000',
     });
+    events = testEvents();
     tickets = new TicketsService(
       prisma,
       provider as unknown as NowPaymentsClient,
       config,
-      testEvents(),
+      events,
     );
 
     await prisma.ticket.deleteMany({
@@ -149,6 +151,73 @@ describe('TicketsService (integration, local Postgres)', () => {
       where: { user_id: { in: [USER_A, USER_B] } },
     });
   }
+
+  it('expires stale holds once, leaving paid and fresh orders alone', async () => {
+    const base = {
+      match_id: liveMatchId,
+      user_id: USER_A,
+      quantity: 1,
+      unit_price_usd: 10,
+      total_usd: 10,
+    };
+    await prisma.profile.upsert({
+      where: { id: USER_A },
+      create: { id: USER_A },
+      update: {},
+    });
+    const stale = await prisma.ticketOrder.create({
+      data: {
+        ...base,
+        status: 'pending',
+        expires_at: new Date(Date.now() - 60_000),
+      },
+    });
+    const fresh = await prisma.ticketOrder.create({
+      data: {
+        ...base,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 600_000),
+      },
+    });
+    const paidLate = await prisma.ticketOrder.create({
+      // Payment landed before the job ran: must stay paid.
+      data: {
+        ...base,
+        status: 'paid',
+        expires_at: new Date(Date.now() - 60_000),
+      },
+    });
+    events.emitted.length = 0;
+
+    expect(await tickets.expireStaleHolds()).toBe(1);
+    expect(await tickets.expireStaleHolds()).toBe(0);
+
+    const statuses = await prisma.ticketOrder.findMany({
+      where: { id: { in: [stale.id, fresh.id, paidLate.id] } },
+      select: { id: true, status: true },
+    });
+    const byId = Object.fromEntries(
+      statuses.map((row) => [row.id, row.status]),
+    );
+    expect(byId).toEqual({
+      [stale.id]: 'expired',
+      [fresh.id]: 'pending',
+      [paidLate.id]: 'paid',
+    });
+    expect(events.emitted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'order.changed',
+          orderId: stale.id,
+          status: 'expired',
+        }),
+        { type: 'tickets.changed', matchId: liveMatchId },
+      ]),
+    );
+    await prisma.ticketOrder.deleteMany({
+      where: { id: { in: [stale.id, fresh.id, paidLate.id] } },
+    });
+  });
 
   it('returns null availability without a config and quota after upsert', async () => {
     const empty = await tickets.availability(liveMatchId);

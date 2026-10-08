@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import type { DomainEventOf } from '../../infra/events/domain-events';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEvents, Rooms } from './realtime.constants';
-import { RealtimeGateway } from './realtime.gateway';
+import { RealtimePublisher } from './realtime-publisher';
 
 /** The score/status slice of a match pushed on every change. */
 export interface MatchUpdate {
@@ -28,7 +28,7 @@ export class RealtimeBroadcaster {
   private readonly logger = new Logger(RealtimeBroadcaster.name);
 
   constructor(
-    private readonly gateway: RealtimeGateway,
+    private readonly gateway: RealtimePublisher,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -126,6 +126,21 @@ export class RealtimeBroadcaster {
         RealtimeEvents.ticketsChanged,
         {
           match_id: event.matchId,
+        },
+      ),
+    );
+  }
+
+  @OnEvent('order.changed', { async: true })
+  async onOrderChanged(event: DomainEventOf<'order.changed'>): Promise<void> {
+    await this.safely(() =>
+      this.gateway.publish(
+        Rooms.user(event.userId),
+        RealtimeEvents.orderUpdate,
+        {
+          id: event.orderId,
+          match_id: event.matchId,
+          status: event.status,
         },
       ),
     );

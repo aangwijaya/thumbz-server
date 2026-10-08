@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build: full toolchain to compile, slim non-root runtime image.
-# The same image runs the API (default CMD) and, from Phase 5, the worker.
+# The same image runs the API (default CMD) and the worker
+# (`node dist/worker.js`, a second Railway service with that start command).
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /app

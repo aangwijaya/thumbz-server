@@ -23,6 +23,13 @@ export type DomainEvent =
       id: string;
     }
   | { type: 'tickets.changed'; matchId: string }
+  | {
+      type: 'order.changed';
+      orderId: string;
+      userId: string;
+      matchId: string;
+      status: string;
+    }
   | { type: 'comment.created'; matchId: string; commentId: string }
   | { type: 'comment.deleted'; matchId: string; commentId: string };
 
