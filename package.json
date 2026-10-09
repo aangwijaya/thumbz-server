@@ -25,7 +25,8 @@
     "start:worker:dev": "nest start --watch --entryFile worker",
     "start:worker:prod": "node dist/worker",
     "media:package": "bash scripts/media/package.sh",
-    "media:register": "ts-node scripts/media/register.ts"
+    "media:register": "ts-node scripts/media/register.ts",
+    "load:ws": "node load/ws-fanout.mjs"
   },
   "dependencies": {
     "@nest-lab/throttler-storage-redis": "^1.2.0",
