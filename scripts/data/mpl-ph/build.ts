@@ -37,8 +37,6 @@ const EMBLEM_ICON = (id: string) =>
   `https://mlbb-image.scoregg.com/emblem/${id}.png`;
 const TALENT_ICON = (id: string) =>
   `https://mlbb-image.scoregg.com/rune/${id}.png`;
-const HERO_ICON = (id: string) =>
-  `https://mlbb-image.scoregg.com/hero_h/${id}.png`;
 
 /** Main emblem sets: not in the Academy data; identified from their icons. */
 const EMBLEM_SETS: Record<string, string> = {
@@ -192,8 +190,8 @@ function main(): void {
             purchases.forEach((purchase) => usedItems.add(purchase.itemId));
             if (player.emblemId) usedEmblems.add(player.emblemId);
             player.talentIds.forEach((talent) => usedTalents.add(talent));
-            if (player.heroIconId)
-              heroIcons.set(player.hero, HERO_ICON(player.heroIconId));
+            if (player.heroIconUrl)
+              heroIcons.set(player.hero, player.heroIconUrl);
             const key = `${side.team}/${player.nickname}`;
             const entry = playerHeroes.get(key) ?? {
               team: side.team,
@@ -260,8 +258,8 @@ function main(): void {
         const entry = playerHeroes.get(key) ?? { team: code, heroes: [] };
         entry.heroes.push(player.hero);
         playerHeroes.set(key, entry);
-        if (player.heroIconId)
-          heroIcons.set(player.hero, HERO_ICON(player.heroIconId));
+        if (player.heroIconUrl)
+          heroIcons.set(player.hero, player.heroIconUrl);
       }
     }
     review.push([

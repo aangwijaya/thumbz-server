@@ -32,7 +32,8 @@ export interface TeamTotals {
 export interface PlayerLine {
   nickname: string;
   hero: string;
-  heroIconId: string | null;
+  /** The page's own hero icon (its path differs for newer heroes). */
+  heroIconUrl: string | null;
   kills: number;
   deaths: number;
   assists: number;
@@ -79,6 +80,12 @@ const number = (text: string): number => {
 
 const logoFile = (src: string | undefined): string =>
   /\/teams\/([^/?]+)$/.exec(src ?? '')?.[1] ?? '';
+
+const httpsUrl = (src: string | undefined): string | null => {
+  if (!src) return null;
+  const url = src.startsWith('//') ? `https:${src}` : src;
+  return url.startsWith('https://') ? url : null;
+};
 
 const fileId = (src: string | undefined): string | null =>
   src ? (/\/([^/?]+)\.(?:png|webp|jpg)/.exec(src)?.[1] ?? null) : null;
@@ -243,7 +250,7 @@ export function parseMatchPage(html: string): ParsedGame[] {
           return {
             nickname: cells[0].text().trim(),
             hero: cells[1].text().trim(),
-            heroIconId: fileId(cells[1].find('img').attr('src')),
+            heroIconUrl: httpsUrl(cells[1].find('img').attr('src')),
             kills: number(cells[2].text()),
             deaths: number(cells[3].text()),
             assists: number(cells[4].text()),

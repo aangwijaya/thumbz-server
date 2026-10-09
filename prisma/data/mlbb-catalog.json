@@ -463,7 +463,7 @@
  },
  "heroes": {
   "Alice": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/3015072019610.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/253/3015072019610.png",
    "lanes": [
     "Exp Lane",
     "Jungle"
@@ -489,19 +489,19 @@
    ]
   },
   "Barats": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1811260718385.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/259/1811260718385.png",
    "lanes": [
     "Jungle"
    ]
   },
   "Belerick": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0614104933588.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/258/0614104933588.png",
    "lanes": [
     "Roam"
    ]
   },
   "Carmilla": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1317582665675.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/27/p/252/1317582665675.jpg",
    "lanes": [
     "Roam"
    ]
@@ -567,13 +567,13 @@
    ]
   },
   "Hirara": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1810181178495.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/266/1810181178495.png",
    "lanes": [
     "Jungle"
    ]
   },
   "Kalea": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/3015102929805.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/253/3015102929805.png",
    "lanes": [
     "Roam"
    ]
@@ -586,7 +586,7 @@
    ]
   },
   "Lukas": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0614125979896.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/258/0614125979896.png",
    "lanes": [
     "Exp Lane",
     "Jungle"
@@ -599,13 +599,13 @@
    ]
   },
   "Marcel": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0916382764021.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/263/0916382764021.png",
    "lanes": [
     "Roam"
    ]
   },
   "Melissa": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1318001527975.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/253/1318001527975.png",
    "lanes": [
     "Gold Lane"
    ]
@@ -629,19 +629,19 @@
    ]
   },
   "Obsidia": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1010583049059.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/2511/1010583049059.png",
    "lanes": [
     "Gold Lane"
    ]
   },
   "Paquito": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0614085454643.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/258/0614085454643.png",
    "lanes": [
     "Exp Lane"
    ]
   },
   "Phoveus": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0614154958540.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/258/0614154958540.png",
    "lanes": [
     "Exp Lane"
    ]
@@ -653,13 +653,13 @@
    ]
   },
   "Sora": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1717443916579.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/2512/1717443916579.png",
    "lanes": [
     "Exp Lane"
    ]
   },
   "Suyou": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/1010590217262.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/254/1010590217262.png",
    "lanes": [
     "Jungle"
    ]
@@ -683,7 +683,7 @@
    ]
   },
   "Wu/Zetian": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/2418575518975.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/27/p/251/2418575518975.png",
    "lanes": [
     "Mid Lane"
    ]
@@ -695,13 +695,13 @@
    ]
   },
   "Zhuxin": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0614081359683.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/258/0614081359683.png",
    "lanes": [
     "Mid Lane"
    ]
   },
   "cici": {
-   "icon_url": "https://mlbb-image.scoregg.com/hero_h/0913143393900.png",
+   "icon_url": "https://mlbb-image.scoregg.com/m/33/p/256/0913143393900.png",
    "lanes": [
     "Exp Lane"
    ]

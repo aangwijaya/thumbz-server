@@ -58,7 +58,7 @@ describe('MPL PH parsers', () => {
     expect(onic.players[0]).toEqual({
       nickname: 'K1NGKONG',
       hero: 'Aulus',
-      heroIconId: '108',
+      heroIconUrl: 'https://mlbb-image.scoregg.com/hero_h/108.png',
       kills: 4,
       deaths: 0,
       assists: 5,
