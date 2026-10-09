@@ -80,6 +80,10 @@
    "name": "Flame Hunter's Speed Boots",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/1412.png"
   },
+  "1413": {
+   "name": "Behemoth Hunter's Speed Boots",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/1413.png"
+  },
   "1511": {
    "name": "Roaming Boots - Conceal",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/1511.png"
@@ -99,6 +103,10 @@
   "2002": {
    "name": "Ogre Tomahawk",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2002.png"
+  },
+  "2003": {
+   "name": "Rogue Meteor",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2003.png"
   },
   "2004": {
    "name": "Fury hammer",
@@ -171,6 +179,10 @@
   "2201": {
    "name": "Ares Belt",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2201.png"
+  },
+  "2202": {
+   "name": "Molten Essence",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2202.png"
   },
   "2203": {
    "name": "Silence Robe",
@@ -264,6 +276,10 @@
    "name": "Glowing Wand",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3105.png"
   },
+  "3106": {
+   "name": "Starlium Scythe",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3106.png"
+  },
   "3108": {
    "name": "Blood Wings",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3108.png"
@@ -283,6 +299,10 @@
   "3113": {
    "name": "Clock of Destiny",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3113.png"
+  },
+  "3201": {
+   "name": "Cursed Helmet",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3201.png"
   },
   "3202": {
    "name": "Guardian Helmet",
@@ -327,6 +347,10 @@
   "3422": {
    "name": "Flame Hunter's Tough Boots",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3422.png"
+  },
+  "3423": {
+   "name": "Behemoth Hunter's Tough Boots",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3423.png"
   },
   "3431": {
    "name": "Ice Hunter's Magic Boots",
@@ -572,8 +596,20 @@
     "Jungle"
    ]
   },
+  "Hylos": {
+   "icon_url": "https://mlbb-image.scoregg.com/hero_h/49.png",
+   "lanes": [
+    "Roam"
+   ]
+  },
   "Kalea": {
    "icon_url": "https://mlbb-image.scoregg.com/m/33/p/253/3015102929805.png",
+   "lanes": [
+    "Roam"
+   ]
+  },
+  "Khufra": {
+   "icon_url": "https://mlbb-image.scoregg.com/hero_h/78.png",
    "lanes": [
     "Roam"
    ]
@@ -649,6 +685,13 @@
   "Rafaela": {
    "icon_url": "https://mlbb-image.scoregg.com/hero_h/14.png",
    "lanes": [
+    "Roam"
+   ]
+  },
+  "Selena": {
+   "icon_url": "https://mlbb-image.scoregg.com/hero_h/63.png",
+   "lanes": [
+    "Mid Lane",
     "Roam"
    ]
   },

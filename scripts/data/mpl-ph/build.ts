@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   inferGameWinners,
+  playableOrder,
   isFinished,
   latestFinishedWith,
   parseItemization,
@@ -133,13 +134,26 @@ function main(): void {
         side.team = team.code.toUpperCase();
       }
     }
-    const winners = inferGameWinners(
+    const inferred = inferGameWinners(
       parsed,
       codes,
       scheduled.score as [number, number],
     );
+    // The page's game order, unless its winners make an impossible series.
+    const order = playableOrder(inferred);
+    if (order.some((pageIndex, index) => pageIndex !== index)) {
+      review.push([
+        'check',
+        slug,
+        order.map((pageIndex) => `G${pageIndex + 1}`).join(' '),
+        'game order',
+        `page order ${inferred.join(',')} is impossible; replayed as ${order.map((i) => inferred[i]).join(',')}`,
+      ]);
+    }
+    const ordered = order.map((pageIndex) => parsed[pageIndex]);
+    const winners = order.map((pageIndex) => inferred[pageIndex]);
 
-    const games = parsed.map((game, index) => {
+    const games = ordered.map((game, index) => {
       const timeline = parseItemization(
         read(`items-${slug}-g${game.gameNumber}.html`),
       );
@@ -150,13 +164,13 @@ function main(): void {
       );
       review.push([
         'game winner',
-        `${slug} G${game.gameNumber}`,
+        `${slug} G${index + 1}`,
         winners[index],
         'inferred',
         `towers ${game.sides.map((s) => `${s.team} ${s.totals.towers}`).join(' / ')}, lords ${game.sides.map((s) => s.totals.lords).join('-')}`,
       ]);
       return {
-        game_number: game.gameNumber,
+        game_number: index + 1,
         duration_seconds: game.durationSeconds,
         winner: winners[index],
         sides: game.sides.map((side) => ({

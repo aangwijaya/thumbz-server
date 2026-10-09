@@ -406,3 +406,30 @@ export function inferGameWinners(
   }
   return winners;
 }
+
+/**
+ * Indexes of the games in the order they can have been played. The page's
+ * numbering is trusted unless its inferred winners are impossible (a team
+ * taking the series before the last game); then the series loser's wins come
+ * first, everything else in page order. Such a series is flagged for review.
+ */
+export function playableOrder(
+  winners: string[],
+  winsToTake = WINS_TO_TAKE_SERIES,
+): number[] {
+  const indexes = winners.map((_, index) => index);
+  const wins = new Map<string, number>();
+  const decidedEarly = winners.some((winner, index) => {
+    wins.set(winner, (wins.get(winner) ?? 0) + 1);
+    return (wins.get(winner) ?? 0) >= winsToTake && index < winners.length - 1;
+  });
+  if (!decidedEarly) return indexes;
+  const total = (team: string) => winners.filter((w) => w === team).length;
+  const seriesWinner = [...new Set(winners)].sort(
+    (a, b) => total(b) - total(a),
+  )[0];
+  return [
+    ...indexes.filter((index) => winners[index] !== seriesWinner),
+    ...indexes.filter((index) => winners[index] === seriesWinner),
+  ];
+}

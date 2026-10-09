@@ -8,6 +8,7 @@ import {
   parseItemization,
   parseMatchPage,
   parseSchedule,
+  playableOrder,
   type TeamTotals,
 } from './parse';
 import { assignRoles, fit } from './roles';
@@ -146,5 +147,12 @@ describe('MPL PH parsers', () => {
     expect(
       fit({ key: 'x', team: 't', lanes: [['Exp Lane', 'Jungle']] }, 'jungle'),
     ).toBe(1);
+  });
+
+  it('keeps the page order unless its winners are an impossible series', () => {
+    expect(playableOrder(['ONIC', 'TNC', 'ONIC'])).toEqual([0, 1, 2]);
+    expect(playableOrder(['OMG', 'OMG'])).toEqual([0, 1]);
+    // FLCN would take the series in game 2, yet a game 3 was played.
+    expect(playableOrder(['FLCN', 'FLCN', 'TNC'])).toEqual([2, 0, 1]);
   });
 });
