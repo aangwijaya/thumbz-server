@@ -1,124 +1,129 @@
 # thumbz-server
 
-NestJS backend for the THUMBZ esports companion app. Serves the API contract in [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) against a Supabase PostgreSQL database.
+API and background worker for **THUMBZ**, a Mobile Legends esports companion:
+live matches with realtime stats, replays with DRM, venue tickets paid by
+QRIS / bank virtual account / crypto, search, and match reminders.
 
-## Stack
+NestJS 11 · Prisma 6 on Supabase Postgres · Redis (cache, rate limits,
+queues, realtime fan-out) · BullMQ · Socket.IO · Docker.
 
-- NestJS 11 (CommonJS) + TypeScript
-- Prisma 6 (`@prisma/client`), schema in `prisma/schema.prisma`
-- Supabase: PostgreSQL (local via `supabase start`, or cloud), JWKS-based JWT verification
-- JWT auth: RS256 verified via `SUPABASE_JWKS_URL` (no client-secret key exchange)
-- `helmet`, `@nestjs/throttler` (write + authenticated rate limiting), global validation
+The frontend lives in [`thumbz-next-client`](../thumbz-next-client). The
+boundary between them is [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) plus the
+generated [`openapi.json`](openapi.json) (`/docs` serves Swagger UI).
 
-## Prerequisites
+## Architecture
 
-- Node 20+
-- Local Supabase stack (Docker Desktop + `supabase` CLI) OR a cloud project
-- `.env` copied from `.env.example` (see below)
+```mermaid
+flowchart LR
+  subgraph Vercel
+    web[Next.js client<br/>ISR + edge CDN, PWA]
+  end
+  subgraph Railway
+    api[API<br/>REST + Socket.IO /rt]
+    worker[Worker<br/>BullMQ jobs, simulator]
+  end
+  redis[(Redis<br/>cache · rate limits · queues<br/>socket.io adapter/emitter)]
+  pg[(Supabase Postgres<br/>RLS locked, API-only)]
+  storage[(Supabase Storage<br/>encrypted HLS/DASH)]
+  pay[Xendit · NOWPayments]
+  push[Web Push services]
 
-## Setup
-
-```bash
-cp .env.example .env      # then fill in real values
-npm install
+  web -- REST / WebSocket --> api
+  api --> pg
+  api --> redis
+  worker --> pg
+  worker --> redis
+  redis -. fan-out .-> api
+  pay -- webhooks --> api
+  api -- revalidate tags --> web
+  worker -- reminders --> push
+  web -- segments --> storage
 ```
 
-### Database target
+## Engineering highlights
 
-`DATABASE_URL` points at a Supabase Postgres. Two proven setups:
+| Area | What | Where | Why |
+| --- | --- | --- | --- |
+| Realtime | Socket.IO rooms, per-room `seq` + REST resync, Redis adapter/emitter, presence | `src/modules/realtime/` | [ADR 0001](docs/adr/0001-realtime-over-socket-io.md) |
+| Pagination | Opaque keyset cursors (stable ties), capped offsets, `before`/`after` comment cursors | `src/common/utils/cursor.ts` | [ADR 0002](docs/adr/0002-keyset-and-offset-pagination.md) |
+| Search | `pg_trgm` + `tsvector`, typo-tolerant (`onik` → ONIC), cached suggestions | `src/modules/search/` | |
+| Caching | Cache-aside, single flight + Redis lock, jittered TTL, tag invalidation, ETag/304, CDN headers, frontend revalidation | `src/infra/cache/`, `src/infra/revalidation/` | [ADR 0005](docs/adr/0005-redis-cache-aside-with-tags.md) |
+| Payments | One provider interface (Xendit QRIS/VA, NOWPayments, sandbox), inbox dedupe, row locks, pure state machine, amount checks, idempotency keys, signed ticket QR | `src/modules/payments/`, `src/common/idempotency/` | [ADR 0003](docs/adr/0003-payments-behind-one-provider-interface.md) |
+| DRM | ClearKey license server, HLS AES-128 key proxy, sealed keys, 2-device limit, commercial CDM passthrough, packaging pipeline | `src/modules/media/`, `scripts/media/` | [ADR 0004](docs/adr/0004-hybrid-drm.md) |
+| Jobs | Separate worker, idempotent schedulers: hold expiry, reconciliation, reminders, simulator | `src/worker.ts`, `src/modules/jobs/` | [ADR 0006](docs/adr/0006-separate-worker-process.md) |
+| Series model | Games as data, score derived, per-game live data, heroes | `src/modules/matches/`, `src/modules/admin/` | [ADR 0007](docs/adr/0007-series-games-as-data.md) |
+| Web Push | VAPID, per-device subscriptions, deduped reminders, dead-endpoint cleanup | `src/modules/push/` | |
+| Operations | zod-validated env (fails fast), pino JSON logs + request ids, Prometheus `/metrics`, `/health/live` + `/health/ready`, graceful shutdown | `src/config/`, `src/infra/` | |
+| Safety | Test runs refuse non-local databases, RLS deny-by-default, write rate limits per user/IP, error envelope that never leaks internals | `src/prisma/test-database-guard.ts`, `src/common/` | |
 
-- **Cloud (production/current):** session pooler URI from the dashboard
-  (Connect tab), with `?pgbouncer=true` appended. Supabase's IPv4 pooler is
-  required: the direct host (`db.<ref>.supabase.co:5432`) is IPv6-only on new
-  projects, and the *transaction* pooler port (`:6543`) fails Prisma's
-  migration engine with `prepared statement "s1" already exists` / hangs.
-  ```
-  postgresql://postgres.<ref>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=4
-  ```
-  Do not wrap the password in `[...]` (dashboard display format) — Prisma
-  sends the brackets verbatim and auth fails.
-- **Local dev fallback:** `supabase start` (Docker Desktop), then
-  `postgresql://postgres:postgres@127.0.0.1:44322/postgres` (ports remapped to
-  4432x because the 5432x range is excluded on this Windows host).
+## Quick start (local)
 
-### Env vars
+Requirements: Node (see `.nvmrc`), Docker.
 
-| Var | Required | Meaning |
+```bash
+cp .env.example .env              # local values; never put cloud credentials here for tests
+npm ci
+docker compose up -d postgres redis   # Postgres on 44322, Redis on 6379
+npx prisma migrate deploy
+npx prisma db seed                    # demo data: tournaments, teams, ~100 matches, 3 live
+npm run start:dev                     # API on :3001  (Swagger: /docs)
+npm run start:worker:dev              # jobs; LIVE_SIMULATOR=true makes live matches play
+```
+
+Using the full Supabase stack instead (`supabase start`) also gives you Auth and
+Storage locally; point `DATABASE_URL` at `127.0.0.1:44322` and
+`SUPABASE_JWKS_URL` at `http://127.0.0.1:44321/auth/v1/.well-known/jwks.json`
+(plain http is accepted only for localhost in development).
+
+Optional features switch on by env (all documented in `.env.example`):
+Xendit / NOWPayments keys, `PAYMENTS_SANDBOX` (demo checkout), DRM keys,
+VAPID keys (Web Push), `LIVE_SIMULATOR`.
+
+### Protected replay (optional)
+
+```bash
+FFMPEG=ffmpeg PACKAGER=packager npm run media:package -- demo   # synthetic clip unless a source is given
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… DRM_MASTER_KEY=… DATABASE_URL=… \
+  npm run media:register -- media-out/demo --video <video-id>
+```
+
+## Testing
+
+| Suite | Command | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Session-pooler URI (see above). For Vercel serverless, lower `connection_limit` (e.g. `=1`) per function instance |
-| `SUPABASE_JWKS_URL` | yes | `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` |
-| `CORS_ORIGINS` | yes | Comma-separated browser origins (e.g. `http://localhost:3000`) |
-| `PORT` | no | API port (default `3001`) |
-| `NOWPAYMENTS_API_KEY` / `NOWPAYMENTS_IPN_SECRET` | no | Enable venue-ticket crypto checkout (NOWPayments). Empty = checkout returns `503` |
-| `NOWPAYMENTS_API_BASE` | no | Sandbox by default (`https://api-sandbox.nowpayments.io`) |
-| `PUBLIC_API_URL` | no | Public base URL of this API, used for the provider IPN callback |
+| Lint + types | `npm run lint:check && npm run typecheck` | |
+| Unit / integration | `npm run test:cov` | 293 tests; coverage floor in `package.json` |
+| End to end (HTTP + Socket.IO) | `npm run test:e2e -- --coverage` | 183 tests against real Postgres/Redis; 79 % line coverage of `src/`, floor in `test/jest-e2e.json` |
+| Load | see [`load/README.md`](load/README.md) | k6 read paths: 2,012 req/s, p95 88 ms · 2,000 sockets: 100 % reach, p95 45 ms |
 
-Secrets never go to the client; the API only ever receives short-lived access
-tokens which it verifies against the JWKS endpoint.
+Tests only run against a local database: `test/setup-env.ts` loads
+`.env.test`, and the Prisma client refuses any non-local host while
+`NODE_ENV=test`.
 
-## Database
+CI (`.github/workflows/ci.yml`) runs lint, types, build, an OpenAPI drift
+check, migrations + seed, both suites with coverage floors, and a Docker image
+build. `load.yml` runs the load tests against a staging URL on demand.
 
-```bash
-npx prisma migrate deploy   # apply migrations to the target DB
-npx prisma db seed          # idempotent demo dataset (cleans + recreates)
-npx prisma generate         # after schema changes / fresh install
-```
+## Database notes
 
-Migrations encode application-layer enforcement:
+- Migrations live in `prisma/migrations/`; every business table has Row Level
+  Security enabled with no grants to `anon`/`authenticated`. Only the API
+  (service role) reads them and enforces auth itself.
+- Supabase in production: use the **session pooler** URI with
+  `?pgbouncer=true&connection_limit=4`. The direct host is IPv6-only on new
+  projects, and the transaction pooler (`:6543`) breaks Prisma migrations.
+  Don't keep the `[...]` around the password from the dashboard.
+- `npx prisma db seed` recreates the demo data. It never deletes user data
+  beyond its own fixtures, and re-links a registered protected replay.
 
-- Row Level Security enabled on every business table (deny-by-default, no
-  direct grants to `anon`/`authenticated`) — the API uses the service role and
-  enforces auth/authz itself via guards.
-- Referential checks (`CHECK`), enums, and FKs live in the schema.
+## Deployment
 
-Seed output (browsable demo data): 3 tournaments, 14 teams, 70 players,
-~98 matches (incl. 3 live with full economy/live-stats/equipment/events,
-language broadcast variants, live comments, venue ticket configs and league
-key-art thumbnails), 20 videos.
-MPL ID runs a 9-team double round robin; MPL PH runs a 4-team round robin
-(ONIC Philippines, AP.Bren, Aurora Gaming, Falcons) with real team branding
-(logos served via the wsrv/imagekit image proxy). `npx prisma db seed` cleans and recreates; it never touches
-user-scoped data (favorites/history) beyond cleanup of its own fixture slugs.
-Optional env `SEED_ADMIN_ID` (with `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
-to fetch the matching user) creates the `admin` profile; a default
-fallback admin profile (fixed UUID `00000000-0000-4000-8000-000000000001`)
-already exists for local dev.
+Railway, from the `Dockerfile` (`railway.json` runs `prisma migrate deploy`
+before each release):
 
-## Running
+- **api** — default start command, health check `/health`.
+- **worker** — same image, start command `node dist/worker.js`, no public port.
+- A Redis plugin shared by both.
 
-```bash
-npm run start:dev   # watch mode on PORT (3001)
-npm start           # compiled build
-```
-
-- Public: `GET /api/v1/health`, all catalog/home/search endpoints (see API contract)
-- Auth: access tokens from Supabase Auth; `Authorization: Bearer <token>`
-
-## Admin flows (local dev)
-
-Admin role users gate every `/admin/*` route (`@Roles('admin')`). Roles are
-resolved from the JWT; admin profile rows are created lazily by profile type.
-
-## Tests
-
-```bash
-npm run lint        # eslint (fixes in place)
-npm run build       # nest build
-npm test            # unit + integration specs (Prisma against local Postgres)
-npm run test:e2e    # HTTP-level e2e (starts app on an ephemeral port)
-```
-
-Both suites run against the seeded local database; specs use unique slug/URL
-prefixes (`e2e-*`, `https://e2e.example.com/`) and clean up after themselves,
-so they are safe to run repeatedly on seeded data.
-
-## Troubleshooting
-
-- `DATABASE_URL` on local: use `127.0.0.1:44322`; if Supabase isn't running,
-  `supabase start` first (Docker Desktop must be up).
-- Port 3001 in use: change `PORT` in `.env`.
-- Prepared-statement errors against Supabase pooler: connect via the
-  transaction port (`:6543`) which Prisma supports without
-  `pgbouncer=true` connection-options workarounds.
-- `.env` is gitignored; never commit real secrets. If a key leaked, rotate it
-  in Supabase immediately.
+Required production variables are validated at boot; see
+`.env.production.example`.
