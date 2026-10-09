@@ -355,6 +355,36 @@ export class AdminMatchesService {
     return this.getDetail(id);
   }
 
+  /**
+   * Clears a series back to before game 1: games, score, per-game live data
+   * and statistics. Internal (the demo replay loops a recorded series); not
+   * exposed over HTTP.
+   */
+  async restartSeries(id: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.matchGame.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchGoldSnapshot.deleteMany({ where: { match_id: id } }),
+      this.prisma.playerMatchSnapshot.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchItemEvent.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchEvent.deleteMany({ where: { match_id: id } }),
+      this.prisma.playerMatchStatistic.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchTeamStatistic.deleteMany({ where: { match_id: id } }),
+      this.prisma.match.update({
+        where: { id },
+        data: { score_a: 0, score_b: 0, game_number: null },
+      }),
+    ]);
+    await this.publishChangedById(id);
+    for (const kind of [
+      'economy',
+      'live-stats',
+      'equipment',
+      'events',
+    ] as const) {
+      this.events.emit({ type: 'match.live-data', matchId: id, kind });
+    }
+  }
+
   private async publishChangedById(id: string): Promise<void> {
     const match = await this.prisma.match.findUnique({
       where: { id },

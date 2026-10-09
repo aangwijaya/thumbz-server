@@ -1,78 +1,66 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminMatchesService } from '../admin/admin-matches.service';
 import { AdminService } from '../admin/admin.service';
-import { TicketsService } from '../tickets/tickets.service';
 import { MatchEventDto } from '../admin/dto/upsert-events.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  draftHeroes,
-  resetForNextGame,
+  finalStatistics,
+  GameScript,
+  Moment,
+  purchasesBetween,
+  Recording,
+  recordingAt,
   seededRandom,
-  SimState,
-  tick,
+  timelineOf,
   winsNeeded,
-} from './simulation';
+} from './replay';
 
-const ITEMS = {
-  phase2: [
-    { item_id: 'fury-hammer', item_name: 'Fury Hammer' },
-    { item_id: 'elegant-gem', item_name: 'Elegant Gem' },
-    { item_id: 'ares-belt', item_name: 'Ares Belt' },
-    { item_id: 'magic-wand', item_name: 'Magic Wand' },
-  ],
-  phase3: [
-    { item_id: 'war-axe', item_name: 'War Axe' },
-    { item_id: 'antique-cuirass', item_name: 'Antique Cuirass' },
-    { item_id: 'blade-of-despair', item_name: 'Blade of Despair' },
-    { item_id: 'holy-crystal', item_name: 'Holy Crystal' },
-  ],
-};
-
+/** Pause between games of a series (draft), and before a series restarts. */
+const BREAK_MS = 2 * 60_000;
 /** Viewer counts drift every N ticks (each drift invalidates match lists). */
 const VIEWER_DRIFT_EVERY = 6;
-/** A simulated game lasts 12–16 minutes, like a real one. */
-const GAME_MIN_MS = 12 * 60_000;
-const GAME_SPREAD_MS = 4 * 60_000;
-/** Upcoming matches kept on the calendar so the demo never runs dry. */
-const UPCOMING_BUFFER = 4;
-const UPCOMING_SPACING_MS = 2 * 60 * 60_000;
-/** Matches kept on air at once. */
-const LIVE_TARGET = 2;
+/** Gold history written when a game is picked up mid-way (chart resolution). */
+const BACKFILL_STEP_SECONDS = 30;
+/** Upcoming matches about to start move a day later (they stay "upcoming"). */
+const ROLL_CHECK_MS = 10 * 60_000;
+const ROLL_WITHIN_MS = 20 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 
-interface MatchSim {
-  state: SimState;
-  names: Record<string, string>;
-  ticks: number;
+interface Replay {
   bestOf: number;
-  game: number;
-  gameStartedAt: number;
-  gameLengthMs: number;
-  heroes: Record<string, string>;
-  roles: Array<{ player_id: string; role: string | null }>;
-  /** No kill yet this game: the next one is first blood. */
-  firstBloodPending: boolean;
+  teamNames: Record<string, string>;
+  nicknames: Record<string, string>;
+  recordings: Map<number, Recording>;
+  timelines: Map<number, Moment[]>;
+  /** The game being played back, once resumed. */
+  game: number | null;
+  /** Seconds of the game already written (events / item purchases). */
+  eventsUpTo: number;
+  itemsUpTo: number;
+  ticks: number;
 }
 
 /**
  * Demo mode (LIVE_SIMULATOR=true, ticked by the worker's live-simulator
- * job): makes the seeded live matches "play" — gold, kills, objectives,
- * item buys, game after game until a team takes the series, then the next
- * scheduled match goes live — through the same ingestion services the admin
- * API uses, so caching, domain events, realtime and push reminders are
- * exercised exactly as in production.
+ * job): live matches replay real recorded games (match_game_recordings) in
+ * real time — stats, item purchases at their real seconds, kills and
+ * objectives, the real winner at the real duration — game after game; when a
+ * series is over it starts again, so the demo always has live matches.
+ * Everything goes through the same ingestion services the admin API uses, so
+ * caching, domain events, realtime and push are exercised as in production.
  */
 @Injectable()
 export class LiveSimulatorService {
   private readonly logger = new Logger(LiveSimulatorService.name);
-  private readonly sims = new Map<string, MatchSim>();
+  private readonly replays = new Map<string, Replay | null>();
   private readonly rand = seededRandom(Date.now() % 2 ** 31);
   private running = false;
+  private lastRoll = 0;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly matches: AdminMatchesService,
     private readonly economy: AdminService,
-    private readonly tickets: TicketsService,
   ) {}
 
   /** One tick for every live match. Overlapping ticks are skipped. */
@@ -80,381 +68,412 @@ export class LiveSimulatorService {
     if (this.running) return;
     this.running = true;
     try {
-      let live = await this.prisma.match.findMany({
+      const live = await this.prisma.match.findMany({
         where: { status: 'live' },
         select: { id: true },
       });
-      // Series end and the worker may have been off: keep LIVE_TARGET on air.
-      for (let missing = LIVE_TARGET - live.length; missing > 0; missing--) {
-        await this.promoteNextScheduled(null);
-      }
-      if (live.length < LIVE_TARGET) {
-        live = await this.prisma.match.findMany({
-          where: { status: 'live' },
-          select: { id: true },
-        });
-      }
       for (const { id } of live) {
-        await this.stepMatch(id).catch((error) =>
-          this.logger.warn(`simulating ${id} failed: ${String(error)}`),
+        await this.replayMatch(id).catch((error) =>
+          this.logger.warn(`replaying ${id} failed: ${String(error)}`),
         );
       }
-      for (const id of this.sims.keys()) {
-        if (!live.some((match) => match.id === id)) this.sims.delete(id);
+      for (const id of this.replays.keys()) {
+        if (!live.some((match) => match.id === id)) this.replays.delete(id);
       }
+      await this.rollCalendar();
     } finally {
       this.running = false;
     }
   }
 
-  private async stepMatch(matchId: string): Promise<void> {
-    const sim = this.sims.get(matchId) ?? (await this.load(matchId));
-    if (!sim) return;
-    if (Date.now() - sim.gameStartedAt >= sim.gameLengthMs) {
-      await this.finishGame(matchId, sim);
+  /** One tick of one live match (public for tests). */
+  async replayMatch(matchId: string): Promise<void> {
+    if (!this.replays.has(matchId)) {
+      this.replays.set(matchId, await this.load(matchId));
+    }
+    const replay = this.replays.get(matchId);
+    if (!replay) return; // live, but nothing recorded to play back
+
+    const games = await this.prisma.matchGame.findMany({
+      where: { match_id: matchId },
+      orderBy: { game_number: 'asc' },
+      select: {
+        game_number: true,
+        status: true,
+        started_at: true,
+        ended_at: true,
+        winner_team_id: true,
+      },
+    });
+    const now = Date.now();
+    const live = games.find((game) => game.status === 'live');
+
+    if (live) {
+      const recording = replay.recordings.get(live.game_number);
+      if (!recording) {
+        await this.restart(matchId, replay);
+        return;
+      }
+      const startedAt = live.started_at?.getTime() ?? now;
+      if (replay.game !== live.game_number) {
+        await this.resume(matchId, replay, recording, startedAt);
+      }
+      const elapsed = (now - startedAt) / 1000;
+      await this.play(matchId, replay, recording, startedAt, elapsed);
+      if (elapsed >= recording.duration_seconds) {
+        await this.finishGame(matchId, replay, recording, startedAt);
+      } else {
+        await this.driftViewers(matchId, replay);
+      }
       return;
     }
-    const result = tick(sim.state, this.rand, sim.names);
-    sim.state = result.state;
-    sim.ticks += 1;
-    const now = new Date().toISOString();
-    const game_number = sim.game;
+
+    const last = games.at(-1);
+    if (!last) {
+      await this.startGame(matchId, replay, 1);
+      return;
+    }
+    if (now - (last.ended_at?.getTime() ?? 0) < BREAK_MS) return;
+    const wins = new Map<string, number>();
+    for (const game of games) {
+      if (!game.winner_team_id) continue;
+      wins.set(game.winner_team_id, (wins.get(game.winner_team_id) ?? 0) + 1);
+    }
+    const decided = Math.max(0, ...wins.values()) >= winsNeeded(replay.bestOf);
+    const next = last.game_number + 1;
+    if (decided || !replay.recordings.has(next)) {
+      await this.restart(matchId, replay);
+      return;
+    }
+    await this.startGame(matchId, replay, next);
+  }
+
+  private async startGame(
+    matchId: string,
+    replay: Replay,
+    game: number,
+  ): Promise<void> {
+    await this.matches.upsertGame(matchId, game, {
+      status: 'live',
+      started_at: new Date().toISOString(),
+    });
+    replay.game = game;
+    replay.eventsUpTo = -1;
+    replay.itemsUpTo = -1;
+  }
+
+  /** The series is over (or has nothing more recorded): play it again. */
+  private async restart(matchId: string, replay: Replay): Promise<void> {
+    await this.matches.restartSeries(matchId);
+    this.logger.log(`series ${matchId} restarts from game 1`);
+    await this.startGame(matchId, replay, 1);
+  }
+
+  /**
+   * Picks a game up where the stored data ends (worker restart, or a game
+   * the seed started in the past): written events and purchases are not
+   * repeated, and a missing gold history is filled in.
+   */
+  private async resume(
+    matchId: string,
+    replay: Replay,
+    recording: Recording,
+    startedAt: number,
+  ): Promise<void> {
+    const game = recording.game_number;
+    const [event, item, gold] = await Promise.all([
+      this.prisma.matchEvent.findFirst({
+        where: { match_id: matchId, game_number: game },
+        orderBy: { occurred_at: 'desc' },
+        select: { occurred_at: true },
+      }),
+      this.prisma.matchItemEvent.findFirst({
+        where: { match_id: matchId, game_number: game },
+        orderBy: { purchased_at: 'desc' },
+        select: { purchased_at: true },
+      }),
+      this.prisma.matchGoldSnapshot.count({
+        where: { match_id: matchId, game_number: game },
+      }),
+    ]);
+    const secondOf = (at: Date | undefined) =>
+      at ? (at.getTime() - startedAt) / 1000 : -1;
+    replay.game = game;
+    replay.eventsUpTo = secondOf(event?.occurred_at);
+    replay.itemsUpTo = secondOf(item?.purchased_at);
+
+    const elapsed = Math.min(
+      (Date.now() - startedAt) / 1000,
+      recording.duration_seconds,
+    );
+    if (gold === 0 && elapsed > BACKFILL_STEP_SECONDS) {
+      const timeline = this.timeline(replay, recording);
+      const points = [];
+      for (let t = 0; t < elapsed; t += BACKFILL_STEP_SECONDS) {
+        const state = recordingAt(recording, timeline, t);
+        const recorded_at = new Date(startedAt + t * 1000).toISOString();
+        for (const [team_id, value] of Object.entries(state.gold)) {
+          points.push({ team_id, gold: value, game_number: game, recorded_at });
+        }
+      }
+      await this.economy.upsertEconomy(matchId, points);
+    }
+  }
+
+  /** Writes the game as it stands at `elapsed` seconds. */
+  private async play(
+    matchId: string,
+    replay: Replay,
+    recording: Recording,
+    startedAt: number,
+    elapsed: number,
+  ): Promise<void> {
+    const t = Math.min(elapsed, recording.duration_seconds);
+    const game_number = recording.game_number;
+    const timeline = this.timeline(replay, recording);
+    const state = recordingAt(recording, timeline, t);
+    const at = (second: number) =>
+      new Date(startedAt + Math.round(second * 1000)).toISOString();
+    const recorded_at = at(t);
 
     await this.economy.upsertEconomy(
       matchId,
-      [sim.state.teamA, sim.state.teamB].map((team_id) => ({
+      Object.entries(state.gold).map(([team_id, gold]) => ({
         team_id,
-        gold: sim.state.gold[team_id] ?? 0,
+        gold,
         game_number,
-        recorded_at: now,
+        recorded_at,
       })),
     );
     await this.matches.upsertLiveStats(
       matchId,
-      sim.state.players.map((player) => ({
-        ...player,
-        hero: sim.heroes[player.player_id] ?? null,
+      state.players.map((player) => ({
+        player_id: player.player_id,
+        team_id: player.team_id,
+        kills: player.kills,
+        deaths: player.deaths,
+        assists: player.assists,
+        gold: player.gold,
+        damage: player.damage,
+        damage_taken: player.damage_taken,
+        level: player.level,
+        hero: player.hero,
+        hero_icon_url: player.hero_icon_url,
         game_number,
-        recorded_at: now,
+        recorded_at,
       })),
     );
 
-    const events: MatchEventDto[] = result.kills
-      .slice(0, 1)
-      .map(({ killer, victim }) => {
-        const first = sim.firstBloodPending;
-        sim.firstBloodPending = false;
-        const team = sim.names[killer.team_id] ?? 'A team';
-        return {
-          team_id: killer.team_id,
-          player_id: killer.player_id,
-          event_type: first ? ('first_blood' as const) : ('kill' as const),
-          title: first
-            ? `First blood to ${team}`
-            : `${team} picked off ${sim.names[victim.team_id] ?? 'an enemy'}`,
+    const firstKill = timeline.find((moment) => moment.kind === 'kill');
+    const events: MatchEventDto[] = timeline
+      .filter(
+        (moment) => moment.second > replay.eventsUpTo && moment.second <= t,
+      )
+      .flatMap((moment): MatchEventDto[] => {
+        const base = {
           game_number,
-          occurred_at: now,
+          occurred_at: at(moment.second),
+          // Real counts, reconstructed times (see replay.ts).
+          details: { reconstructed: true },
         };
+        if (moment.kind === 'death') return [];
+        if (moment.kind === 'kill') {
+          const killer = this.describe(replay, recording, moment.killer_id);
+          const victim = moment.victim_id
+            ? (replay.nicknames[moment.victim_id] ?? 'an enemy')
+            : null;
+          const first = moment === firstKill;
+          return [
+            {
+              ...base,
+              team_id: moment.team_id,
+              player_id: moment.killer_id,
+              event_type: first ? 'first_blood' : 'kill',
+              title: first
+                ? `First blood: ${killer}${victim ? ` on ${victim}` : ''}`
+                : victim
+                  ? `${killer} took down ${victim}`
+                  : `${killer} scored a kill`,
+            },
+          ];
+        }
+        const team = replay.teamNames[moment.team_id] ?? 'A team';
+        return [
+          {
+            ...base,
+            team_id: moment.team_id,
+            event_type: moment.kind,
+            title:
+              moment.kind === 'lord'
+                ? `${team} secured the Lord`
+                : moment.kind === 'turtle'
+                  ? `${team} secured the Turtle`
+                  : `${team} destroyed a tower`,
+          },
+        ];
       });
-    if (result.objective) {
-      events.push({ ...result.objective, game_number, occurred_at: now });
-    }
-    if (events.length > 0) {
-      await this.matches.upsertEvents(matchId, events);
-    }
+    if (events.length > 0) await this.matches.upsertEvents(matchId, events);
+    replay.eventsUpTo = Math.max(replay.eventsUpTo, t);
 
-    if (result.purchase) {
-      const pool = ITEMS[result.purchase.phase];
-      const item = pool[Math.floor(this.rand() * pool.length)];
-      await this.matches.upsertEquipment(matchId, [
-        {
-          player_id: result.purchase.player.player_id,
-          team_id: result.purchase.player.team_id,
-          ...item,
-          phase: result.purchase.phase,
+    const purchases = purchasesBetween(recording, replay.itemsUpTo, t);
+    if (purchases.length > 0) {
+      await this.matches.upsertEquipment(
+        matchId,
+        purchases.map((purchase) => ({
+          player_id: purchase.player_id,
+          team_id: purchase.team_id,
+          item_id: purchase.item_id,
+          item_name: purchase.item_name,
+          phase: purchase.tier === 3 ? 'phase3' : 'phase2',
+          tier: purchase.tier,
+          icon_url: purchase.icon_url,
           game_number,
-          purchased_at: now,
-        },
-      ]);
-    }
-
-    if (sim.ticks % VIEWER_DRIFT_EVERY === 0) {
-      const current = await this.prisma.match.findUnique({
-        where: { id: matchId },
-        select: { viewer_count: true },
-      });
-      const base = current?.viewer_count ?? 0;
-      const drift = Math.round(base * (this.rand() * 0.06 - 0.025));
-      await this.matches.update(matchId, {
-        viewer_count: Math.max(0, base + drift),
-      });
-    }
-  }
-
-  /**
-   * Ends the current game (the gold leader wins), then either starts the next
-   * game or — once a team has taken the series — completes the match and
-   * brings the next scheduled match live so the demo never runs dry.
-   */
-  private async finishGame(matchId: string, sim: MatchSim): Promise<void> {
-    const { teamA, teamB, gold } = sim.state;
-    const winner = (gold[teamA] ?? 0) >= (gold[teamB] ?? 0) ? teamA : teamB;
-    const result = await this.matches.upsertGame(matchId, sim.game, {
-      status: 'completed',
-      winner_team_id: winner,
-    });
-    const scoreA = result.data.score_a ?? 0;
-    const scoreB = result.data.score_b ?? 0;
-    const needed = winsNeeded(sim.bestOf);
-
-    if (scoreA >= needed || scoreB >= needed) {
-      await this.matches.setLive(matchId, {
-        status: 'completed',
-        score_a: scoreA,
-        score_b: scoreB,
-        winner_team_id: scoreA > scoreB ? teamA : teamB,
-      });
-      this.sims.delete(matchId);
-      this.logger.log(`series ${matchId} finished ${scoreA}-${scoreB}`);
-      await this.promoteNextScheduled(matchId);
-      return;
-    }
-
-    sim.game += 1;
-    await this.matches.upsertGame(matchId, sim.game, { status: 'live' });
-    sim.state = resetForNextGame(sim.state);
-    sim.gameStartedAt = Date.now();
-    sim.gameLengthMs = this.gameLength();
-    sim.heroes = draftHeroes(sim.roles, this.rand);
-    sim.firstBloodPending = true;
-  }
-
-  /**
-   * The next scheduled match goes live on the channel the finished match
-   * used (its stream and commentary feeds), like a league broadcast would.
-   */
-  private async promoteNextScheduled(finishedId: string | null): Promise<void> {
-    await this.ensureUpcoming();
-    const [next, finished] = await Promise.all([
-      this.prisma.match.findFirst({
-        where: { status: 'scheduled' },
-        orderBy: { scheduled_at: 'asc' },
-        select: { id: true },
-      }),
-      // The channel to reuse: the finished match, else the latest one on air.
-      this.prisma.match.findFirst({
-        where: finishedId ? { id: finishedId } : { stream_url: { not: null } },
-        orderBy: { updated_at: 'desc' },
-        select: {
-          stream_url: true,
-          broadcasts: { select: { language: true, stream_url: true } },
-        },
-      }),
-    ]);
-    if (!next) return;
-    if (finished && finished.broadcasts.length > 0) {
-      await this.matches.upsertBroadcasts(
-        next.id,
-        finished.broadcasts.map((feed) => ({ ...feed, viewer_count: 0 })),
+          purchased_at: at(purchase.second),
+        })),
       );
     }
-    await this.matches.setLive(next.id, {
-      status: 'live',
-      stream_url: finished?.stream_url ?? undefined,
+    replay.itemsUpTo = Math.max(replay.itemsUpTo, t);
+  }
+
+  /** The recorded end: final statistics, then the real winner. */
+  private async finishGame(
+    matchId: string,
+    replay: Replay,
+    recording: Recording,
+    startedAt: number,
+  ): Promise<void> {
+    await this.matches.upsertStatistics(matchId, finalStatistics(recording));
+    const result = await this.matches.upsertGame(
+      matchId,
+      recording.game_number,
+      {
+        status: 'completed',
+        winner_team_id: recording.winner_team_id,
+        started_at: new Date(startedAt).toISOString(),
+        ended_at: new Date(
+          startedAt + recording.duration_seconds * 1000,
+        ).toISOString(),
+      },
+    );
+    replay.game = null;
+    this.logger.log(
+      `match ${matchId} game ${recording.game_number} ended: ${result.data.score_a}-${result.data.score_b}`,
+    );
+  }
+
+  private async driftViewers(matchId: string, replay: Replay): Promise<void> {
+    replay.ticks += 1;
+    if (replay.ticks % VIEWER_DRIFT_EVERY !== 0) return;
+    const current = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      select: { viewer_count: true },
+    });
+    const base = current?.viewer_count ?? 0;
+    const drift = Math.round(base * (this.rand() * 0.06 - 0.025));
+    await this.matches.update(matchId, {
+      viewer_count: Math.max(0, base + drift),
     });
   }
 
   /**
-   * Keeps a few matches on the calendar: when fewer than UPCOMING_BUFFER are
-   * scheduled, new pairings from the latest tournament are added two hours
-   * apart, selling tickets like the latest match did.
+   * Upcoming matches never actually start (live matches are recordings):
+   * one about to start moves a day later, so the calendar always has
+   * upcoming matches with tickets and no reminder announces a match that
+   * will not happen.
    */
-  private async ensureUpcoming(): Promise<void> {
-    const scheduled = await this.prisma.match.findMany({
-      where: { status: 'scheduled' },
-      orderBy: { scheduled_at: 'desc' },
-      select: { scheduled_at: true },
+  async rollCalendar(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastRoll < ROLL_CHECK_MS) return;
+    this.lastRoll = now;
+    const soon = await this.prisma.match.findMany({
+      where: {
+        status: 'scheduled',
+        scheduled_at: { lt: new Date(now + ROLL_WITHIN_MS) },
+      },
+      select: { id: true, scheduled_at: true },
     });
-    const missing = UPCOMING_BUFFER - scheduled.length;
-    if (missing <= 0) return;
-
-    const latest = await this.prisma.match.findFirst({
-      where: { tournament_id: { not: null } },
-      orderBy: { scheduled_at: 'desc' },
-      select: { tournament_id: true },
-    });
-    if (!latest?.tournament_id) return;
-    const played = await this.prisma.match.findMany({
-      where: { tournament_id: latest.tournament_id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    const teams = [
-      ...new Set(played.flatMap((m) => [m.team_a_id, m.team_b_id])),
-    ];
-    if (teams.length < 2) return;
-    const config = await this.prisma.matchTicketConfig.findFirst({
-      where: { match: { tournament_id: latest.tournament_id } },
-      orderBy: { updated_at: 'desc' },
-    });
-
-    let at = Math.max(Date.now(), scheduled[0]?.scheduled_at.getTime() ?? 0);
-    for (let i = 0; i < missing; i++) {
-      at += UPCOMING_SPACING_MS;
-      const a = teams[Math.floor(this.rand() * teams.length)];
-      const others = teams.filter((team) => team !== a);
-      const b = others[Math.floor(this.rand() * others.length)];
-      const created = await this.matches.create({
-        tournament_id: latest.tournament_id,
-        team_a_id: a,
-        team_b_id: b,
-        stage: 'regular_season',
-        best_of: 3,
+    for (const match of soon) {
+      let at = match.scheduled_at.getTime();
+      while (at < now + ROLL_WITHIN_MS) at += DAY_MS;
+      await this.matches.update(match.id, {
         scheduled_at: new Date(at).toISOString(),
       });
-      if (config) {
-        await this.tickets.upsertConfig(created.data.id, {
-          venue_name: config.venue_name,
-          venue_city: config.venue_city ?? undefined,
-          price_usd: Number(config.price_usd),
-          price_idr: config.price_idr ?? undefined,
-          quota_total: config.quota_total,
-          is_active: true,
-        });
-      }
     }
-    this.logger.log(`scheduled ${missing} upcoming matches`);
+    if (soon.length > 0) {
+      this.logger.log(`moved ${soon.length} upcoming matches a day later`);
+    }
   }
 
-  private gameLength(): number {
-    return GAME_MIN_MS + Math.floor(this.rand() * GAME_SPREAD_MS);
+  private timeline(replay: Replay, recording: Recording): Moment[] {
+    let timeline = replay.timelines.get(recording.game_number);
+    if (!timeline) {
+      timeline = timelineOf(recording);
+      replay.timelines.set(recording.game_number, timeline);
+    }
+    return timeline;
   }
 
-  /** Resumes from the latest stored snapshots so restarts do not reset a game. */
-  private async load(matchId: string): Promise<MatchSim | null> {
+  private describe(
+    replay: Replay,
+    recording: Recording,
+    playerId: string,
+  ): string {
+    const nickname = replay.nicknames[playerId] ?? 'A player';
+    const hero = recording.script.players.find(
+      (p) => p.player_id === playerId,
+    )?.hero;
+    return hero ? `${nickname} (${hero})` : nickname;
+  }
+
+  private async load(matchId: string): Promise<Replay | null> {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
       select: {
+        best_of: true,
         team_a_id: true,
         team_b_id: true,
-        best_of: true,
-        score_a: true,
-        score_b: true,
         teamA: { select: { name: true } },
         teamB: { select: { name: true } },
-        games: {
-          orderBy: { game_number: 'asc' },
-          select: { game_number: true, status: true, started_at: true },
-        },
+        recordings: { orderBy: { game_number: 'asc' } },
       },
     });
-    if (!match) return null;
-    const teams = [match.team_a_id, match.team_b_id];
-
-    // A series scored before games were tracked: record those games first so
-    // the score (derived from games) survives. Demo data only.
-    if (match.games.length === 0) {
-      const winners = [
-        ...Array<string>(match.score_a ?? 0).fill(match.team_a_id),
-        ...Array<string>(match.score_b ?? 0).fill(match.team_b_id),
-      ];
-      for (const [index, winner_team_id] of winners.entries()) {
-        await this.matches.upsertGame(matchId, index + 1, {
-          status: 'completed',
-          winner_team_id,
-        });
-        match.games.push({
-          game_number: index + 1,
-          status: 'completed',
-          started_at: null,
-        });
-      }
-    }
-
-    // Resume the live game, or open the next one of the series.
-    let current = match.games.find((game) => game.status === 'live');
-    if (!current) {
-      const number = match.games.length + 1;
-      await this.matches.upsertGame(matchId, number, { status: 'live' });
-      current = { game_number: number, status: 'live', started_at: new Date() };
-    }
-    const game = current.game_number;
-    const [roster, gold, snapshots] = await Promise.all([
-      this.prisma.player.findMany({
-        where: { team_id: { in: teams }, role: { not: 'coach' } },
-        select: { id: true, team_id: true, role: true },
-        orderBy: { nickname: 'asc' },
-      }),
-      Promise.all(
-        teams.map((team_id) =>
-          this.prisma.matchGoldSnapshot.findFirst({
-            where: { match_id: matchId, team_id, game_number: game },
-            orderBy: { recorded_at: 'desc' },
-            select: { gold: true },
-          }),
+    if (!match || match.recordings.length === 0) return null;
+    const recordings = new Map(
+      match.recordings.map((row) => [
+        row.game_number,
+        {
+          match_id: matchId,
+          game_number: row.game_number,
+          duration_seconds: row.duration_seconds,
+          winner_team_id: row.winner_team_id,
+          script: row.script as unknown as GameScript,
+        },
+      ]),
+    );
+    const playerIds = [
+      ...new Set(
+        [...recordings.values()].flatMap((recording) =>
+          recording.script.players.map((p) => p.player_id),
         ),
       ),
-      this.prisma.playerMatchSnapshot.findMany({
-        where: { match_id: matchId, game_number: game },
-        orderBy: { recorded_at: 'desc' },
-        distinct: ['player_id'],
-      }),
-    ]);
-    const latest = new Map(snapshots.map((row) => [row.player_id, row]));
-    const players = teams.flatMap((team) =>
-      roster
-        .filter((player) => player.team_id === team)
-        .slice(0, 5)
-        .map((player) => {
-          const last = latest.get(player.id);
-          return {
-            player_id: player.id,
-            team_id: team,
-            kills: last?.kills ?? 0,
-            deaths: last?.deaths ?? 0,
-            assists: last?.assists ?? 0,
-            gold: last?.gold ?? 0,
-            level: last?.level ?? 1,
-          };
-        }),
-    );
-    const sim: MatchSim = {
-      state: {
-        teamA: match.team_a_id,
-        teamB: match.team_b_id,
-        gold: {
-          [match.team_a_id]: gold[0]?.gold ?? 0,
-          [match.team_b_id]: gold[1]?.gold ?? 0,
-        },
-        players,
-        objectivesTaken: 0,
-      },
-      names: {
+    ];
+    const players = await this.prisma.player.findMany({
+      where: { id: { in: playerIds } },
+      select: { id: true, nickname: true },
+    });
+    return {
+      bestOf: match.best_of,
+      teamNames: {
         [match.team_a_id]: match.teamA.name,
         [match.team_b_id]: match.teamB.name,
       },
+      nicknames: Object.fromEntries(players.map((p) => [p.id, p.nickname])),
+      recordings,
+      timelines: new Map(),
+      game: null,
+      eventsUpTo: -1,
+      itemsUpTo: -1,
       ticks: 0,
-      bestOf: match.best_of,
-      game,
-      gameStartedAt: current.started_at?.getTime() ?? Date.now(),
-      gameLengthMs: this.gameLength(),
-      heroes: {},
-      roles: [],
-      firstBloodPending: snapshots.every((row) => row.kills === 0),
     };
-    sim.roles = players.map((player) => ({
-      player_id: player.player_id,
-      role: roster.find((row) => row.id === player.player_id)?.role ?? null,
-    }));
-    // Keep heroes already shown for this game; draft the rest.
-    sim.heroes = {
-      ...draftHeroes(sim.roles, this.rand),
-      ...Object.fromEntries(
-        snapshots
-          .filter((row) => row.hero)
-          .map((row) => [row.player_id, row.hero as string]),
-      ),
-    };
-    this.sims.set(matchId, sim);
-    return sim;
   }
 }
