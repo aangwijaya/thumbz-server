@@ -109,7 +109,15 @@
     "maxWorkers": 6,
     "setupFiles": [
       "<rootDir>/../test/setup-env.ts"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 35,
+        "statements": 35,
+        "functions": 35,
+        "branches": 30
+      }
+    }
   },
   "allowScripts": {
     "prisma@6.19.3": true,

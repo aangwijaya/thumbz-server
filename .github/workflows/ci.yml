@@ -71,14 +71,18 @@ jobs:
       - name: Unit and integration tests
         run: npm run test:cov -- --runInBand
 
+      # Most behaviour is covered end to end against real Postgres/Redis;
+      # both suites enforce a coverage floor (package.json / test/jest-e2e.json).
       - name: E2E tests
-        run: npm run test:e2e -- --runInBand
+        run: npm run test:e2e -- --runInBand --coverage
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage
-          path: coverage/
+          path: |
+            coverage/
+            coverage-e2e/
           if-no-files-found: ignore
 
   docker:

@@ -4,6 +4,7 @@
 # build output
 /dist
 /coverage
+/coverage-e2e
 
 # logs
 *.log
