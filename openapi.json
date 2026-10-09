@@ -3580,6 +3580,97 @@
         ]
       }
     },
+    "/api/v1/push/config": {
+      "get": {
+        "operationId": "Push_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "VAPID public key for PushManager.subscribe (contract §18).",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/v1/me/push-subscriptions": {
+      "put": {
+        "operationId": "Push_subscribe",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "push"
+        ]
+      },
+      "delete": {
+        "operationId": "Push_unsubscribe",
+        "parameters": [
+          {
+            "name": "endpoint",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 1000,
+              "pattern": "^https:\\/\\/[^\\s]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/v1/me/push-subscriptions/test": {
+      "post": {
+        "operationId": "Push_test",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "push"
+        ]
+      }
+    },
     "/api/v1/admin/jobs": {
       "get": {
         "operationId": "Jobs_overview",
@@ -4753,6 +4844,47 @@
       "TokenQuery": {
         "type": "object",
         "properties": {}
+      },
+      "PushKeysDto": {
+        "type": "object",
+        "properties": {
+          "p256dh": {
+            "type": "string",
+            "description": "Client public key (P-256, 65 bytes → 87 base64url chars).",
+            "maxLength": 200
+          },
+          "auth": {
+            "type": "string",
+            "description": "Client auth secret (16 bytes).",
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ]
+      },
+      "PushSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "maxLength": 1000,
+            "pattern": "^https:\\/\\/[^\\s]+$"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeysDto"
+          },
+          "expirationTime": {
+            "type": "number",
+            "nullable": true,
+            "description": "Sent by browsers (usually null); not stored."
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ]
       }
     }
   }

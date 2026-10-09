@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { MAINTENANCE_QUEUE } from '../../infra/queue/queue.module';
 import { PaymentsService } from '../payments/payments.service';
+import { PushService } from '../push/push.service';
 import { LiveSimulatorService } from '../simulator/live-simulator.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { Jobs } from './jobs.constants';
@@ -16,6 +17,7 @@ export class MaintenanceProcessor extends WorkerHost {
     private readonly tickets: TicketsService,
     private readonly simulator: LiveSimulatorService,
     private readonly payments: PaymentsService,
+    private readonly push: PushService,
   ) {
     super();
   }
@@ -31,6 +33,11 @@ export class MaintenanceProcessor extends WorkerHost {
         const resolved = await this.payments.reconcile();
         if (resolved > 0) this.logger.log(`reconciled ${resolved} payments`);
         return { resolved };
+      }
+      case Jobs.matchReminders: {
+        const sent = await this.push.remindUpcoming();
+        if (sent > 0) this.logger.log(`sent ${sent} match reminders`);
+        return { sent };
       }
       case Jobs.liveSimulator:
         await this.simulator.step();

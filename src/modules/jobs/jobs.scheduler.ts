@@ -6,6 +6,7 @@ import { MAINTENANCE_QUEUE } from '../../infra/queue/queue.module';
 import {
   EXPIRE_HOLDS_EVERY_MS,
   Jobs,
+  MATCH_REMINDERS_EVERY_MS,
   RECONCILE_PAYMENTS_EVERY_MS,
 } from './jobs.constants';
 
@@ -35,6 +36,20 @@ export class JobsScheduler implements OnApplicationBootstrap {
       { every: RECONCILE_PAYMENTS_EVERY_MS },
       { name: Jobs.reconcilePayments },
     );
+
+    if (this.config.get('vapid')) {
+      await this.queue.upsertJobScheduler(
+        Jobs.matchReminders,
+        { every: MATCH_REMINDERS_EVERY_MS },
+        // The next sweep catches anything missed; never retry into duplicates.
+        {
+          name: Jobs.matchReminders,
+          opts: { attempts: 1, removeOnComplete: true, removeOnFail: 50 },
+        },
+      );
+    } else {
+      await this.queue.removeJobScheduler(Jobs.matchReminders);
+    }
 
     if (this.config.get<boolean>('liveSimulator')) {
       const every = this.config.get<number>('liveSimulatorIntervalMs') ?? 5_000;

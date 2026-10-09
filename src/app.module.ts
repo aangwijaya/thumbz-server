@@ -23,6 +23,7 @@ import { HealthModule } from './modules/health/health.module';
 import { HistoryModule } from './modules/history/history.module';
 import { HomeModule } from './modules/home/home.module';
 import { MatchesModule } from './modules/matches/matches.module';
+import { PushModule } from './modules/push/push.module';
 import { MediaModule } from './modules/media/media.module';
 import { PlayersModule } from './modules/players/players.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -62,6 +63,7 @@ import { PrismaModule } from './prisma/prisma.module';
     TicketsModule,
     RealtimeModule,
     MediaModule,
+    PushModule,
     QueueModule.forRoot(),
     JobsApiModule,
     ThrottlerModule.forRootAsync({

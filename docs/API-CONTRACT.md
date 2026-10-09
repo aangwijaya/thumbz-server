@@ -1592,6 +1592,7 @@ A separate **worker** process (`node dist/worker.js`, same image as the API, no 
 | --- | --- | --- |
 | `expire-holds` | every 60 s | Pending ticket orders past `expires_at` become `expired`; pushes `order:update` to the buyer and `tickets:changed` to the match room; availability caches drop |
 | `live-simulator` | every `LIVE_SIMULATOR_INTERVAL_MS` (only with `LIVE_SIMULATOR=true`) | Advances the seeded live matches (§14) |
+| `match-reminders` | every 60 s (only when VAPID keys are set) | Web Push to followers of either team ~15 min before a scheduled match starts, once per user and match (§18) |
 
 Jobs retry with exponential backoff (3 attempts; the simulator never retries). Events emitted in the worker reach browsers through Redis (`@socket.io/redis-emitter` → API instances' sockets), invalidate the Redis cache directly and trigger frontend revalidation.
 
@@ -1693,4 +1694,28 @@ Content keys are stored only sealed (AES-256-GCM envelope under `DRM_MASTER_KEY`
 **Commercial DRM callback** — `POST /drm/authorize { token }` → `{ data: { allowed: true, user_id, asset_id, kid } }` for license services that validate the `x-thumbz-playback` header server-to-server.
 
 Live streams are not DRM-protected (that needs a live packager); DRM applies to VOD/replays.
+
+## 18. Web Push (match reminders)
+
+Browsers (and installed PWAs, incl. iOS 16.4+ home-screen apps) can receive a reminder ~15 minutes before a match of a followed team starts. Push is enabled only when the API has VAPID keys (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`).
+
+| Method | URL | Access |
+| --- | --- | --- |
+| `GET` | `/push/config` | public |
+| `PUT` | `/me/push-subscriptions` | authenticated |
+| `DELETE` | `/me/push-subscriptions?endpoint=` | authenticated |
+| `POST` | `/me/push-subscriptions/test` | authenticated |
+
+- `GET /push/config` → `{ "data": { "enabled": true, "public_key": "<VAPID public key, base64url>" } }`; `{ "enabled": false, "public_key": null }` when push is off. Pass `public_key` as `applicationServerKey` to `PushManager.subscribe`.
+- `PUT /me/push-subscriptions` with the browser's `PushSubscription.toJSON()` shape: `{ "endpoint": "https://…", "keys": { "p256dh": "…", "auth": "…" } }` → `200 { "data": { "endpoint": "…", "created_at": "…" } }`. Upsert by `endpoint` (a device re-subscribing, or another account signing in on it, takes it over). `endpoint` must be `https://`, ≤ 1000 chars; keys base64url. `503` when push is off.
+- `DELETE /me/push-subscriptions?endpoint=…` → `204` (idempotent; only the caller's own subscription is removed).
+- `POST /me/push-subscriptions/test` → `202 { "data": { "sent": 1 } }`: sends a test notification to all of the caller's devices. `404` when the caller has no subscription, `503` when push is off.
+
+**Notification payload** (JSON, read by the service worker):
+
+```json
+{ "title": "ONIC vs RRQ starts in 15 min", "body": "MPL ID Season 16 · Playoffs", "url": "/matches/<id>", "tag": "match:<id>" }
+```
+
+`tag` lets a newer notification replace an older one for the same match. Subscriptions the push service reports as gone (`404`/`410`) are deleted automatically.
 

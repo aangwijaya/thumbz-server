@@ -227,8 +227,12 @@ describe('Matches (e2e)', () => {
   });
 
   it('sorts by viewer_count desc', async () => {
+    // Scoped to this file's tournament: a shared DB (seed + live simulator)
+    // holds other matches with any viewer count.
     const response = await request(app.getHttpServer())
-      .get('/api/v1/matches?sort=viewer_count&order=desc')
+      .get(
+        `/api/v1/matches?tournament_id=${tournamentId}&sort=viewer_count&order=desc`,
+      )
       .expect(200);
 
     const body = response.body as { data: Array<{ viewer_count: number }> };

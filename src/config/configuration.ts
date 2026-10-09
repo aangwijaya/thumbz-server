@@ -49,6 +49,8 @@ export interface AppConfig {
   nowpaymentsApiKey: string | null;
   nowpaymentsIpnSecret: string | null;
   nowpaymentsApiBase: string;
+  /** Web Push (match reminders); null = push disabled. */
+  vapid: { publicKey: string; privateKey: string; subject: string } | null;
 }
 
 /** Env vars are often present but empty (`FOO=`); treat that as unset. */
@@ -162,6 +164,24 @@ const envSchema = z
     NOWPAYMENTS_API_KEY: optional(z.string().trim()),
     NOWPAYMENTS_IPN_SECRET: optional(z.string().trim()),
     NOWPAYMENTS_API_BASE: optional(httpUrl),
+    VAPID_PUBLIC_KEY: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{80,100}$/, 'VAPID_PUBLIC_KEY must be base64url'),
+    ),
+    VAPID_PRIVATE_KEY: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{40,50}$/, 'VAPID_PRIVATE_KEY must be base64url'),
+    ),
+    VAPID_SUBJECT: optional(
+      z
+        .string()
+        .regex(
+          /^(mailto:|https:\/\/)\S+$/,
+          'VAPID_SUBJECT must be a mailto: or https:// URL',
+        ),
+    ),
   })
   .superRefine((env, ctx) => {
     // Plain http is only for a local Supabase stack (`supabase start`) in dev.
@@ -177,6 +197,20 @@ const envSchema = z
           message: 'SUPABASE_JWKS_URL is required and must be an https:// URL',
         });
       }
+    }
+    // Web Push is all-or-nothing: a half-configured key pair fails at boot.
+    const vapid = [
+      env.VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY,
+      env.VAPID_SUBJECT,
+    ].filter((value) => value !== undefined).length;
+    if (vapid !== 0 && vapid !== 3) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['VAPID_PUBLIC_KEY'],
+        message:
+          'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must be set together',
+      });
     }
     if (env.NODE_ENV !== 'production') {
       return;
@@ -267,5 +301,15 @@ export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
     nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
     nowpaymentsApiBase:
       parsed.NOWPAYMENTS_API_BASE ?? 'https://api-sandbox.nowpayments.io',
+    vapid:
+      parsed.VAPID_PUBLIC_KEY &&
+      parsed.VAPID_PRIVATE_KEY &&
+      parsed.VAPID_SUBJECT
+        ? {
+            publicKey: parsed.VAPID_PUBLIC_KEY,
+            privateKey: parsed.VAPID_PRIVATE_KEY,
+            subject: parsed.VAPID_SUBJECT,
+          }
+        : null,
   };
 }

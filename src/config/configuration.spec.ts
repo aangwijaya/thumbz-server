@@ -104,6 +104,7 @@ describe('configuration', () => {
       frontendUrl: 'http://localhost:3000',
       publicApiUrl: 'http://localhost:3001',
       trustProxy: 0,
+      vapid: null,
       logLevel: 'info',
       metricsToken: null,
       redisUrl: null,
@@ -181,5 +182,35 @@ describe('validateEnv in production', () => {
     expect(() =>
       validateEnv({ ...validEnv, REDIS_URL: 'http://localhost:6379' }),
     ).toThrow(/REDIS_URL/);
+  });
+
+  describe('Web Push (VAPID)', () => {
+    // Shapes of a real `web-push generate-vapid-keys` pair.
+    const keys = {
+      VAPID_PUBLIC_KEY: 'B'.repeat(87),
+      VAPID_PRIVATE_KEY: 'p'.repeat(43),
+      VAPID_SUBJECT: 'mailto:ops@thumbz.example',
+    };
+
+    it('is disabled without keys and enabled with all three', () => {
+      expect(configuration(validEnv).vapid).toBeNull();
+      expect(configuration({ ...validEnv, ...keys }).vapid).toEqual({
+        publicKey: keys.VAPID_PUBLIC_KEY,
+        privateKey: keys.VAPID_PRIVATE_KEY,
+        subject: keys.VAPID_SUBJECT,
+      });
+    });
+
+    it('rejects a partial key set', () => {
+      expect(() =>
+        validateEnv({ ...validEnv, VAPID_PUBLIC_KEY: keys.VAPID_PUBLIC_KEY }),
+      ).toThrow(/must be set together/);
+    });
+
+    it('rejects a subject that is not mailto: or https://', () => {
+      expect(() =>
+        validateEnv({ ...validEnv, ...keys, VAPID_SUBJECT: 'ops@thumbz' }),
+      ).toThrow(/VAPID_SUBJECT/);
+    });
   });
 });

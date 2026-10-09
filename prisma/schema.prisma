@@ -75,6 +75,7 @@ model Profile {
   updated_at DateTime  @updatedAt
 
   favorites    Favorite[]
+  push_subscriptions PushSubscription[]
   watchHistory WatchHistory[]
   comments     MatchComment[]
   ticketOrders TicketOrder[]
@@ -645,3 +646,21 @@ model ContentKey {
 
   @@map("content_keys")
 }
+
+/// Web Push subscriptions (one row per browser/device), for match reminders.
+model PushSubscription {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  /// Push service URL; unique per browser installation.
+  endpoint     String    @unique
+  p256dh       String
+  auth         String
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("push_subscriptions")
+}
+
