@@ -93,8 +93,8 @@ SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… DRM_MASTER_KEY=… DATABASE_URL=�
 | Suite | Command | Notes |
 | --- | --- | --- |
 | Lint + types | `npm run lint:check && npm run typecheck` | |
-| Unit / integration | `npm run test:cov` | 293 tests; coverage floor in `package.json` |
-| End to end (HTTP + Socket.IO) | `npm run test:e2e -- --coverage` | 183 tests against real Postgres/Redis; 79 % line coverage of `src/`, floor in `test/jest-e2e.json` |
+| Unit / integration | `npm run test:cov` | 298 tests; coverage floor in `package.json` |
+| End to end (HTTP + Socket.IO) | `npm run test:e2e -- --coverage` | 191 tests against real Postgres/Redis (incl. the live replay loop on a faked clock); 83 % line coverage of `src/`, floor in `test/jest-e2e.json` |
 | Load | see [`load/README.md`](load/README.md) | k6 read paths: 2,012 req/s, p95 88 ms · 2,000 sockets: 100 % reach, p95 45 ms |
 
 Tests only run against a local database: `test/setup-env.ts` loads
