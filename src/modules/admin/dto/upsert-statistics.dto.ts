@@ -7,9 +7,27 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
+  Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+/** An emblem, talent or item reference with its display name and icon (§19). */
+export class GameAssetDto {
+  @IsString()
+  @MaxLength(40)
+  id: string;
+
+  @IsString()
+  @MaxLength(80)
+  name: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  icon_url?: string | null;
+}
 
 export class TeamStatsDto {
   @IsUUID()
@@ -97,6 +115,33 @@ export class PlayerStatsDto {
   hero_picked?: string | null;
 
   @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  hero_icon_url?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  tower_damage?: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GameAssetDto)
+  emblem?: GameAssetDto | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GameAssetDto)
+  talents?: GameAssetDto[];
+
+  /** Final build, slot order. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GameAssetDto)
+  items?: GameAssetDto[];
+
+  @IsOptional()
   @IsBoolean()
   mvp?: boolean;
 
@@ -106,6 +151,13 @@ export class PlayerStatsDto {
 }
 
 export class UpsertStatisticsDto {
+  /** Game of the series (contract §19); default: the match's current game, else 1. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  game_number?: number;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

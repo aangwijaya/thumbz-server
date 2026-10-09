@@ -207,4 +207,171 @@ describe('Games (e2e)', () => {
       ['other', 2],
     ]);
   });
+  it('stores statistics, builds and icons per game', async () => {
+    const icon = (path: string) => `https://img.example.com/${path}.png`;
+    const statistics = (gameNumber: number | undefined, kills: number) =>
+      http()
+        .put(`/api/v1/admin/matches/${matchId}/statistics`)
+        .set(bearer(admin))
+        .send({
+          ...(gameNumber === undefined ? {} : { game_number: gameNumber }),
+          teams: [
+            { team_id: teamIds[0], kills, details: { lords: 1, turtles: 2 } },
+          ],
+          players: [
+            {
+              player_id: playerIds[0],
+              team_id: teamIds[0],
+              kills,
+              hero_picked: 'Ling',
+              hero_icon_url: icon('hero/ling'),
+              tower_damage: 4200,
+              emblem: { id: '20005', name: 'Assassin', icon_url: icon('e') },
+              talents: [{ id: '1', name: 'Rupture', icon_url: icon('t') }],
+              items: [
+                { id: '2', name: 'Blade of Despair', icon_url: icon('i') },
+              ],
+            },
+          ],
+        });
+
+    await statistics(1, 7).expect(200);
+    // No game_number: the game being played (2).
+    const current = await statistics(undefined, 2).expect(200);
+    expect((current.body as { data: { game_number: number } }).data).toEqual(
+      expect.objectContaining({ game_number: 2 }),
+    );
+    await statistics(1, 9).expect(200); // re-submission replaces game 1
+
+    const read = (query = '') =>
+      http().get(`/api/v1/matches/${matchId}/statistics${query}`).expect(200);
+    type Stats = {
+      data: {
+        game_number: number;
+        teams: Array<{ kills: number; details: Record<string, unknown> }>;
+        players: Array<Record<string, unknown>>;
+      };
+    };
+    const first = ((await read('?game_number=1')).body as Stats).data;
+    expect(first.game_number).toBe(1);
+    expect(first.teams).toEqual([
+      expect.objectContaining({ kills: 9, details: { lords: 1, turtles: 2 } }),
+    ]);
+    expect(first.players).toEqual([
+      expect.objectContaining({
+        kills: 9,
+        hero_picked: 'Ling',
+        hero_icon_url: icon('hero/ling'),
+        tower_damage: 4200,
+        emblem: { id: '20005', name: 'Assassin', icon_url: icon('e') },
+        talents: [{ id: '1', name: 'Rupture', icon_url: icon('t') }],
+        items: [{ id: '2', name: 'Blade of Despair', icon_url: icon('i') }],
+      }),
+    ]);
+    const byDefault = ((await read()).body as Stats).data;
+    expect(byDefault.game_number).toBe(2);
+    expect(byDefault.players[0]).toMatchObject({ kills: 2 });
+
+    // Icons must be https.
+    await http()
+      .put(`/api/v1/admin/matches/${matchId}/statistics`)
+      .set(bearer(admin))
+      .send({
+        players: [
+          {
+            player_id: playerIds[0],
+            team_id: teamIds[0],
+            hero_icon_url: 'javascript:alert(1)',
+          },
+        ],
+      })
+      .expect(400);
+
+    // The roster lists a player once, whatever the number of games.
+    const roster = await http()
+      .get(`/api/v1/matches/${matchId}/roster`)
+      .expect(200);
+    expect((roster.body as { data: Array<{ id: string }> }).data).toEqual([
+      expect.objectContaining({ id: playerIds[0] }),
+    ]);
+  });
+
+  it('keeps the item sequence with tiers and icons', async () => {
+    await http()
+      .put(`/api/v1/admin/matches/${matchId}/equipment`)
+      .set(bearer(admin))
+      .send({
+        purchases: [
+          {
+            player_id: playerIds[0],
+            team_id: teamIds[0],
+            item_id: '2',
+            item_name: 'Blade of Despair',
+            phase: 'phase3',
+            tier: 3,
+            icon_url: 'https://img.example.com/i.png',
+            game_number: 1,
+            purchased_at: '2026-10-01T10:14:00Z',
+          },
+          {
+            player_id: playerIds[0],
+            team_id: teamIds[0],
+            item_id: '9',
+            item_name: 'Knife',
+            phase: 'phase2',
+            tier: 1,
+            game_number: 1,
+            purchased_at: '2026-10-01T10:01:00Z',
+          },
+        ],
+      })
+      .expect(200);
+    const rows = await http()
+      .get(`/api/v1/matches/${matchId}/equipment?game_number=1`)
+      .expect(200);
+    expect(
+      (
+        rows.body as {
+          data: Array<{ item_id: string; tier: number; icon_url: string }>;
+        }
+      ).data.map((row) => [row.item_id, row.tier, row.icon_url]),
+    ).toEqual([
+      ['9', 1, null],
+      ['2', 3, 'https://img.example.com/i.png'],
+    ]);
+  });
+
+  it('counts a series once in player aggregates, averaging per game', async () => {
+    await game(2, { status: 'completed', winner_team_id: teamIds[0] });
+    await game(3, { status: 'live' }).expect(200);
+    await game(3, {
+      status: 'completed',
+      winner_team_id: teamIds[0],
+    }).expect(200);
+    await prisma.match.update({
+      where: { id: matchId },
+      data: { status: 'completed', winner_team_id: teamIds[0] },
+    });
+
+    const stats = await http()
+      .get(`/api/v1/players/${playerIds[0]}/statistics`)
+      .expect(200);
+    const data = (
+      stats.body as {
+        data: {
+          matches_played: number;
+          win_rate: number;
+          avg_kills: number;
+          per_hero: Array<{ hero: string; games: number; wins: number }>;
+        };
+      }
+    ).data;
+    // Games 1 (9 kills, lost) and 2 (2 kills, won); one series, won.
+    expect(data.matches_played).toBe(1);
+    expect(data.win_rate).toBe(1);
+    expect(data.avg_kills).toBe(5.5);
+    expect(data.per_hero).toEqual([
+      expect.objectContaining({ hero: 'Ling', games: 2, wins: 1 }),
+    ]);
+  });
 });

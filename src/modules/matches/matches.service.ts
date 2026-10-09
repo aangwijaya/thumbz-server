@@ -353,22 +353,22 @@ export class MatchesService {
     return { data: toMatchDetail(row) };
   }
 
-  async statistics(id: string): Promise<{
+  async statistics(
+    id: string,
+    requestedGame?: number,
+  ): Promise<{
     data: {
       match_id: string;
+      game_number: number;
       teams: Array<Record<string, unknown>>;
       players: Array<Record<string, unknown>>;
     };
   }> {
-    orNotFound(
-      await this.prisma.match.findUnique({
-        where: { id },
-        select: { id: true },
-      }),
-    );
+    // Statistics are per game (§19); gameOf also answers 404.
+    const game = await this.gameOf(id, requestedGame);
 
     const teamRows = await this.prisma.matchTeamStatistic.findMany({
-      where: { match_id: id },
+      where: { match_id: id, game_number: game },
       orderBy: { team_id: 'asc' },
       include: {
         team: {
@@ -383,7 +383,7 @@ export class MatchesService {
       },
     });
     const playerRows = await this.prisma.playerMatchStatistic.findMany({
-      where: { match_id: id },
+      where: { match_id: id, game_number: game },
       orderBy: { player: { nickname: 'asc' } },
       include: {
         player: {
@@ -401,6 +401,7 @@ export class MatchesService {
     return {
       data: {
         match_id: id,
+        game_number: game,
         teams: teamRows.map((row) => ({
           team_id: row.team_id,
           team: row.team,
@@ -424,6 +425,11 @@ export class MatchesService {
           damage_taken: row.damage_taken,
           level: row.level,
           hero_picked: row.hero_picked,
+          hero_icon_url: row.hero_icon_url,
+          tower_damage: row.tower_damage,
+          emblem: row.emblem,
+          talents: row.talents ?? [],
+          items: row.items ?? [],
           mvp: row.mvp,
           details: row.details,
         })),
@@ -439,8 +445,10 @@ export class MatchesService {
       }),
     );
 
+    // Rows are per game (§19): one entry per player across the series.
     const rows = await this.prisma.playerMatchStatistic.findMany({
       where: { match_id: id },
+      distinct: ['player_id'],
       orderBy: { player: { nickname: 'asc' } },
       include: {
         player: {
@@ -634,6 +642,7 @@ export class MatchesService {
         damage_taken: true,
         level: true,
         hero: true,
+        hero_icon_url: true,
         game_number: true,
         recorded_at: true,
         // Live rankings render before post-match statistics exist (§19).
@@ -662,6 +671,8 @@ export class MatchesService {
         item_name: true,
         phase: true,
         slot: true,
+        tier: true,
+        icon_url: true,
         game_number: true,
         purchased_at: true,
       },

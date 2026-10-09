@@ -22,6 +22,14 @@ import { validateCompletedMatch, validateTransition } from './match-state';
 import { orNotFound } from '../../common/utils/not-found';
 import { DomainEvents } from '../../infra/events/domain-events';
 
+/** Optional JSON column: absent/null stores SQL NULL (re-submission replaces). */
+const jsonOrNull = (
+  value: object | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull =>
+  value == null
+    ? Prisma.DbNull
+    : (JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue);
+
 @Injectable()
 export class AdminMatchesService {
   constructor(
@@ -457,6 +465,8 @@ export class AdminMatchesService {
         select: { team_a_id: true, team_b_id: true },
       }),
     );
+    // Same default as the read (§19): current game, else last, else 1.
+    const gameNumber = await this.matchesService.gameOf(id, dto.game_number);
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const teamRows = dto.teams ?? [];
@@ -494,10 +504,19 @@ export class AdminMatchesService {
         };
         await tx.matchTeamStatistic.upsert({
           where: {
-            match_id_team_id: { match_id: id, team_id: row.team_id },
+            match_id_team_id_game_number: {
+              match_id: id,
+              team_id: row.team_id,
+              game_number: gameNumber,
+            },
           },
           update: data,
-          create: { match_id: id, team_id: row.team_id, ...data },
+          create: {
+            match_id: id,
+            team_id: row.team_id,
+            game_number: gameNumber,
+            ...data,
+          },
         });
       }
       for (const row of playerRows) {
@@ -510,25 +529,35 @@ export class AdminMatchesService {
           damage_taken: row.damage_taken ?? 0,
           level: row.level ?? null,
           hero_picked: row.hero_picked ?? null,
+          hero_icon_url: row.hero_icon_url ?? null,
+          tower_damage: row.tower_damage ?? 0,
+          emblem: jsonOrNull(row.emblem),
+          talents: jsonOrNull(row.talents),
+          items: jsonOrNull(row.items),
           mvp: row.mvp ?? false,
           details: (row.details ?? {}) as Prisma.InputJsonValue,
         };
         await tx.playerMatchStatistic.upsert({
           where: {
-            match_id_player_id: { match_id: id, player_id: row.player_id },
+            match_id_player_id_game_number: {
+              match_id: id,
+              player_id: row.player_id,
+              game_number: gameNumber,
+            },
           },
           update: data,
           create: {
             match_id: id,
             player_id: row.player_id,
             team_id: row.team_id,
+            game_number: gameNumber,
             ...data,
           },
         });
       }
     });
 
-    const statistics = await this.matchesService.statistics(id);
+    const statistics = await this.matchesService.statistics(id, gameNumber);
     await this.publishChangedById(id);
     return statistics;
   }
@@ -575,6 +604,7 @@ export class AdminMatchesService {
       damage_taken: snapshot.damage_taken ?? 0,
       level: snapshot.level ?? null,
       hero: snapshot.hero ?? null,
+      hero_icon_url: snapshot.hero_icon_url ?? null,
       game_number: snapshot.game_number ?? match.game_number ?? 1,
       recorded_at:
         snapshot.recorded_at !== undefined
@@ -607,6 +637,7 @@ export class AdminMatchesService {
         damage_taken: true,
         level: true,
         hero: true,
+        hero_icon_url: true,
         game_number: true,
         recorded_at: true,
       },
@@ -658,6 +689,8 @@ export class AdminMatchesService {
       item_name: purchase.item_name,
       phase: purchase.phase,
       slot: purchase.slot ?? null,
+      tier: purchase.tier ?? null,
+      icon_url: purchase.icon_url ?? null,
       game_number: purchase.game_number ?? match.game_number ?? 1,
       purchased_at:
         purchase.purchased_at !== undefined
@@ -687,6 +720,8 @@ export class AdminMatchesService {
         item_name: true,
         phase: true,
         slot: true,
+        tier: true,
+        icon_url: true,
         game_number: true,
         purchased_at: true,
       },

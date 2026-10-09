@@ -1257,8 +1257,10 @@ The match patch body additionally accepts:
 ```
 
 - `team_id` values must be the match's team A/B → else `422`.
-- Re-submission replaces existing rows for the same `(match_id, team_id)` / `(match_id, player_id)` (idempotent).
-- Response: `200 { "data": MatchStatistics }` (the stored result).
+- Re-submission replaces existing rows for the same `(match_id, team_id, game_number)` / `(match_id, player_id, game_number)` (idempotent).
+- `game_number` (body, optional) scopes the rows to one game of the series (default: the match's current game, else its last game, else 1 — the same game the read defaults to) — §19.
+- Players also accept `hero_icon_url`, `tower_damage`, `emblem`, `talents`, `items` (§19); teams put buffs/lords/turtles in `details`.
+- Response: `200 { "data": MatchStatistics }` (the stored result, for that game).
 
 #### `PUT /admin/matches/:id/economy`
 
@@ -1752,4 +1754,15 @@ A match is a series (`best_of`). Each game is a `MatchGame`:
 **Player snapshots** (`GET /matches/:id/live-stats`) additionally carry `hero` (string | null, the hero picked for that game) and `player` (`{ id, nickname, role }`), so live rankings render before post-match statistics exist. Ingestion accepts an optional `hero`.
 
 **Event types** — `event_type` ∈ `first_blood`, `kill`, `tower`, `turtle`, `lord`, `other`; `team_id` is required for `first_blood`, `tower`, `turtle` and `lord` → else `400 VALIDATION_ERROR`.
+
+### Per-game statistics, builds and icons (additive)
+
+- `GET /matches/:id/statistics?game_number=` — statistics are stored **per game**; default: the game being played, else the last one. The response adds `game_number`.
+  - Player rows add `hero_icon_url`, `tower_damage`, `emblem` (`{ id, name, icon_url } | null`), `talents` (`[{ id, name, icon_url }]`), `items` (final build, `[{ id, name, icon_url }]`).
+  - Team rows' `details` carry `red_buffs`, `blue_buffs`, `lords`, `turtles`, `gold_per_minute`, `damage` when known.
+- `GET /matches/:id/equipment` rows add `icon_url` and `tier` (1 component · 2 intermediate · 3 final); ordered by `purchased_at`, so the list is the item **sequence**. Ingestion accepts both.
+- `PlayerSnapshot` adds `hero_icon_url` (ingestion accepts it).
+- `GET /matches/:id/roster` lists the players who appear in any game's statistics.
+- Player and team aggregates (`/players/:id`, `/players/:id/statistics`, `/teams/:id/statistics`): `matches_played` and `win_rate` count series; `avg_*` are per game; `per_hero` counts games and game wins.
+- Icons are absolute https URLs on third-party CDNs; clients should proxy/resize them (the web client uses its image CDN loader).
 

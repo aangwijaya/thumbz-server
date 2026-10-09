@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
   Max,
   MaxLength,
   Min,
@@ -71,6 +72,10 @@ export class PlayerSnapshotDto {
   @IsString()
   @MaxLength(40)
   hero?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  hero_icon_url?: string | null;
 }
 
 export class UpsertLiveStatsDto {

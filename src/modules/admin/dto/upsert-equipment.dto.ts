@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
   Max,
   Min,
   ValidateNested,
@@ -37,6 +38,17 @@ export class ItemPurchaseDto {
   @IsInt()
   @Min(0)
   slot?: number | null;
+
+  /** 1 component · 2 intermediate · 3 final (§19). */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  tier?: number | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  icon_url?: string | null;
 
   @IsOptional()
   @IsISO8601()

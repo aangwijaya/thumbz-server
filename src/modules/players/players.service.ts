@@ -108,13 +108,33 @@ function roundOneDecimal(value: number): number {
 type StatRow = Prisma.PlayerMatchStatisticGetPayload<{
   include: {
     match: {
-      select: { winner_team_id: true; status: true; tournament_id: true };
+      select: {
+        winner_team_id: true;
+        status: true;
+        tournament_id: true;
+        games: { select: { game_number: true; winner_team_id: true } };
+      };
     };
   };
 }>;
 
 function isCompleted(row: StatRow): boolean {
   return row.match.status === 'completed';
+}
+
+/** Rows are per game (§19): the game's winner, else the series winner. */
+function wonGame(row: StatRow): boolean {
+  const game = row.match.games.find((g) => g.game_number === row.game_number);
+  return (game?.winner_team_id ?? row.match.winner_team_id) === row.team_id;
+}
+
+/** One entry per series: rows are per game, a series counts once. */
+function perSeries(rows: StatRow[]): StatRow[] {
+  const seen = new Map<string, StatRow>();
+  for (const row of rows) {
+    if (!seen.has(row.match_id)) seen.set(row.match_id, row);
+  }
+  return [...seen.values()];
 }
 
 @Injectable()
@@ -155,6 +175,7 @@ export class PlayersService {
             winner_team_id: true,
             status: true,
             tournament_id: true,
+            games: { select: { game_number: true, winner_team_id: true } },
           },
         },
       },
@@ -162,35 +183,26 @@ export class PlayersService {
   }
 
   private computeStats(rows: StatRow[]): PlayerStats {
+    // Averages are per game; matches played and win rate are per series.
     const completed = rows.filter(isCompleted);
-    const played = completed.length;
-    const won = completed.filter(
+    const series = perSeries(completed);
+    const played = series.length;
+    const won = series.filter(
       (row) => row.match.winner_team_id === row.team_id,
     ).length;
-    const avgKills =
-      played === 0
+    const average = (pick: (row: StatRow) => number): number | null =>
+      completed.length === 0
         ? null
         : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.kills, 0) / played,
-          );
-    const avgDeaths =
-      played === 0
-        ? null
-        : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.deaths, 0) / played,
-          );
-    const avgAssists =
-      played === 0
-        ? null
-        : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.assists, 0) / played,
+            completed.reduce((sum, row) => sum + pick(row), 0) /
+              completed.length,
           );
 
     return {
       matches_played: played,
-      avg_kills: avgKills,
-      avg_deaths: avgDeaths,
-      avg_assists: avgAssists,
+      avg_kills: average((row) => row.kills),
+      avg_deaths: average((row) => row.deaths),
+      avg_assists: average((row) => row.assists),
       mvp_count: completed.filter((row) => row.mvp).length,
       win_rate: roundWinRate(won, played),
     };
@@ -205,7 +217,7 @@ export class PlayersService {
     );
 
     const rows = await this.statRows(id);
-    const completed = rows.filter(isCompleted);
+    const completed = perSeries(rows.filter(isCompleted));
 
     // tournament history groups completed matches per tournament
     const tournamentIds = [
@@ -317,13 +329,13 @@ export class PlayersService {
     const rows = await this.statRows(id);
     const completed = rows.filter(isCompleted);
     const stats = this.computeStats(rows);
-    const played = stats.matches_played;
 
     const avgGold =
-      played === 0
+      completed.length === 0
         ? null
         : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.gold, 0) / played,
+            completed.reduce((sum, row) => sum + row.gold, 0) /
+              completed.length,
           );
 
     const heroMap = new Map<
@@ -340,7 +352,7 @@ export class PlayersService {
         kills: 0,
       };
       entry.games += 1;
-      if (row.match.winner_team_id === row.team_id) {
+      if (wonGame(row)) {
         entry.wins += 1;
       }
       entry.kills += row.kills;

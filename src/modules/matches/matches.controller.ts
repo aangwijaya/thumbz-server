@@ -56,14 +56,18 @@ export class MatchesController {
     tags: ({ id }) => [CacheTags.match(id), CacheTags.catalog],
   })
   @Get(':id/statistics')
-  statistics(@Param() params: MatchIdParamsDto): Promise<{
+  statistics(
+    @Param() params: MatchIdParamsDto,
+    @Query() query: MatchGameQueryDto,
+  ): Promise<{
     data: {
       match_id: string;
+      game_number: number;
       teams: Array<Record<string, unknown>>;
       players: Array<Record<string, unknown>>;
     };
   }> {
-    return this.matchesService.statistics(params.id);
+    return this.matchesService.statistics(params.id, query.game_number);
   }
 
   @Public()

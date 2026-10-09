@@ -199,6 +199,7 @@ model Match {
   updated_at           DateTime     @updatedAt
 
   games               MatchGame[]
+  recordings          MatchGameRecording[]
   tournament          Tournament?            @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
   teamA               Team                   @relation("MatchTeamA", fields: [team_a_id], references: [id], onDelete: Restrict)
   teamB               Team                   @relation("MatchTeamB", fields: [team_b_id], references: [id], onDelete: Restrict)
@@ -251,10 +252,27 @@ model MatchGame {
   @@map("match_games")
 }
 
+/// Recorded game data that the demo replay engine plays back live (internal).
+model MatchGameRecording {
+  match_id         String   @db.Uuid
+  game_number      Int
+  duration_seconds Int
+  winner_team_id   String   @db.Uuid
+  /// Per player: hero, final stats, build, purchases with seconds; team totals.
+  script           Json
+  created_at       DateTime @default(now())
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@id([match_id, game_number])
+  @@map("match_game_recordings")
+}
+
 model MatchTeamStatistic {
   id                    String @id @default(uuid()) @db.Uuid
   match_id              String @db.Uuid
   team_id               String @db.Uuid
+  game_number           Int    @default(1)
   kills                 Int    @default(0)
   deaths                Int    @default(0)
   assists               Int    @default(0)
@@ -266,32 +284,41 @@ model MatchTeamStatistic {
   match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
   team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
-  @@unique([match_id, team_id])
+  @@unique([match_id, team_id, game_number])
   @@index([team_id])
   @@map("match_team_statistics")
 }
 
 model PlayerMatchStatistic {
-  id           String  @id @default(uuid()) @db.Uuid
-  match_id     String  @db.Uuid
-  player_id    String  @db.Uuid
-  team_id      String  @db.Uuid
-  kills        Int     @default(0)
-  deaths       Int     @default(0)
-  assists      Int     @default(0)
-  gold         Int     @default(0)
-  damage       Int     @default(0)
-  damage_taken Int     @default(0)
-  level        Int?
-  hero_picked  String?
-  mvp          Boolean @default(false)
-  details      Json    @default("{}")
+  id            String  @id @default(uuid()) @db.Uuid
+  match_id      String  @db.Uuid
+  player_id     String  @db.Uuid
+  team_id       String  @db.Uuid
+  game_number   Int     @default(1)
+  kills         Int     @default(0)
+  deaths        Int     @default(0)
+  assists       Int     @default(0)
+  gold          Int     @default(0)
+  damage        Int     @default(0)
+  damage_taken  Int     @default(0)
+  level         Int?
+  hero_picked   String?
+  hero_icon_url String?
+  tower_damage  Int     @default(0)
+  /// { id, name, icon_url } of the main emblem set.
+  emblem        Json?
+  /// [{ id, name, icon_url }] talents picked.
+  talents       Json?
+  /// [{ id, name, icon_url }] final build, slot order.
+  items         Json?
+  mvp           Boolean @default(false)
+  details       Json    @default("{}")
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
   player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
-  @@unique([match_id, player_id])
+  @@unique([match_id, player_id, game_number])
   @@index([player_id])
   @@index([team_id, match_id])
   @@map("player_match_statistics")
@@ -373,21 +400,22 @@ model MatchGoldSnapshot {
 }
 
 model PlayerMatchSnapshot {
-  id           String   @id @default(uuid()) @db.Uuid
-  match_id     String   @db.Uuid
-  game_number  Int      @default(1)
-  player_id    String   @db.Uuid
-  team_id      String   @db.Uuid
-  kills        Int      @default(0)
-  deaths       Int      @default(0)
-  assists      Int      @default(0)
-  gold         Int      @default(0)
-  damage       Int      @default(0)
-  damage_taken Int      @default(0)
-  level        Int?
+  id            String   @id @default(uuid()) @db.Uuid
+  match_id      String   @db.Uuid
+  game_number   Int      @default(1)
+  player_id     String   @db.Uuid
+  team_id       String   @db.Uuid
+  kills         Int      @default(0)
+  deaths        Int      @default(0)
+  assists       Int      @default(0)
+  gold          Int      @default(0)
+  damage        Int      @default(0)
+  damage_taken  Int      @default(0)
+  level         Int?
   /// Hero picked for this game (null until the draft is known).
-  hero         String?
-  recorded_at  DateTime @default(now())
+  hero          String?
+  hero_icon_url String?
+  recorded_at   DateTime @default(now())
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
   player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
@@ -410,6 +438,9 @@ model MatchItemEvent {
   item_name    String
   phase        match_item_phase
   slot         Int?
+  /// 1 component · 2 intermediate · 3 final.
+  tier         Int?
+  icon_url     String?
   purchased_at DateTime         @default(now())
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
