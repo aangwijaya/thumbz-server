@@ -3,12 +3,13 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsEnum,
-  IsInt,
   IsISO8601,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -40,6 +41,13 @@ export class ItemPurchaseDto {
   @IsOptional()
   @IsISO8601()
   purchased_at?: string;
+
+  /** Game of the series (contract §19); default: the match's current game. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  game_number?: number;
 }
 
 export class UpsertEquipmentDto {

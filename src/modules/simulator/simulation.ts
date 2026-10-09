@@ -133,3 +133,52 @@ export function tick(
     purchase,
   };
 }
+
+/** Hero pools per role (Mobile Legends); flex players draw from all of them. */
+const HERO_POOLS: Record<string, string[]> = {
+  exp: ['Terizla', 'Yu Zhong', 'Paquito', 'Esmeralda', 'Edith', 'Lapu-Lapu'],
+  jungle: ['Fanny', 'Ling', 'Lancelot', 'Hayabusa', 'Joy', 'Fredrinn'],
+  mid: ['Valentina', 'Pharsa', 'Yve', 'Lunox', 'Kagura', 'Novaria'],
+  gold: ['Claude', 'Moskov', 'Brody', 'Beatrix', 'Harith', 'Karrie'],
+  roam: ['Tigreal', 'Hylos', 'Khufra', 'Atlas', 'Franco', 'Chou'],
+};
+
+/** One draft: a hero per player, never the same hero twice in a game. */
+export function draftHeroes(
+  players: Array<{ player_id: string; role: string | null }>,
+  rand: Rand,
+): Record<string, string> {
+  const taken = new Set<string>();
+  const all = Object.values(HERO_POOLS).flat();
+  const picks: Record<string, string> = {};
+  for (const player of players) {
+    const pool = (HERO_POOLS[player.role ?? ''] ?? all).filter(
+      (hero) => !taken.has(hero),
+    );
+    const hero = pick(rand, pool.length > 0 ? pool : all);
+    taken.add(hero);
+    picks[player.player_id] = hero;
+  }
+  return picks;
+}
+
+/** Games a team must win to take a best-of-N series. */
+export const winsNeeded = (bestOf: number): number =>
+  Math.floor(bestOf / 2) + 1;
+
+/** Fresh state for the next game of the series (same lineups, nothing earned yet). */
+export function resetForNextGame(state: SimState): SimState {
+  return {
+    ...state,
+    gold: { [state.teamA]: 0, [state.teamB]: 0 },
+    players: state.players.map((player) => ({
+      ...player,
+      kills: 0,
+      deaths: 0,
+      assists: 0,
+      gold: 0,
+      level: 1,
+    })),
+    objectivesTaken: 0,
+  };
+}

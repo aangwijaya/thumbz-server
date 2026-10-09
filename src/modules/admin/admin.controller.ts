@@ -24,6 +24,7 @@ import { UpsertEventsDto } from './dto/upsert-events.dto';
 import { UpsertLiveStatsDto } from './dto/upsert-live-stats.dto';
 import { UpsertBroadcastsDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
+import { GameParamsDto, UpsertGameDto } from './dto/upsert-game.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -101,6 +102,15 @@ export class AdminController {
   }
 
   @Roles('admin')
+  @Put(':id/games/:gameNumber')
+  upsertGame(
+    @Param() params: GameParamsDto,
+    @Body() body: UpsertGameDto,
+  ): Promise<{ data: MatchDetail }> {
+    return this.adminMatches.upsertGame(params.id, params.gameNumber, body);
+  }
+
+  @Roles('admin')
   @Put(':id/live')
   setLive(
     @Param() params: AdminIdParamsDto,
@@ -130,7 +140,12 @@ export class AdminController {
     @Param() params: AdminIdParamsDto,
     @Body() body: UpsertEconomyDto,
   ): Promise<{
-    data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
+    data: Array<{
+      team_id: string;
+      gold: number;
+      game_number: number;
+      recorded_at: Date;
+    }>;
   }> {
     return this.adminService.upsertEconomy(params.id, body.snapshots);
   }

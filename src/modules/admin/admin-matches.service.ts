@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { LiveMatchDto } from './dto/live-match.dto';
+import { UpsertGameDto } from './dto/upsert-game.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
 import { PlayerSnapshotDto } from './dto/upsert-live-stats.dto';
 import { ItemPurchaseDto } from './dto/upsert-equipment.dto';
@@ -238,6 +239,114 @@ export class AdminMatchesService {
     return detail;
   }
 
+  /**
+   * Upserts one game of a series (contract §19). A live game becomes the
+   * match's current game; completing one recomputes the series score from
+   * completed games, so score and games can never disagree.
+   */
+  async upsertGame(
+    id: string,
+    gameNumber: number,
+    dto: UpsertGameDto,
+  ): Promise<{ data: MatchDetail }> {
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          team_a_id: true,
+          team_b_id: true,
+          best_of: true,
+          games: {
+            select: {
+              game_number: true,
+              status: true,
+              started_at: true,
+              ended_at: true,
+            },
+          },
+        },
+      }),
+    );
+    if (gameNumber > match.best_of) {
+      throw new BusinessRuleException(
+        `game_number must be between 1 and best_of (${match.best_of})`,
+      );
+    }
+    const winner = dto.winner_team_id ?? null;
+    if (dto.status === 'completed' && winner === null) {
+      throw new BusinessRuleException('A completed game needs winner_team_id');
+    }
+    if (
+      winner !== null &&
+      ![match.team_a_id, match.team_b_id].includes(winner)
+    ) {
+      throw new BusinessRuleException(
+        'winner_team_id must be one of the match teams',
+      );
+    }
+    const otherLive = match.games.find(
+      (game) => game.status === 'live' && game.game_number !== gameNumber,
+    );
+    if (dto.status === 'live' && otherLive) {
+      throw new BusinessRuleException(
+        `Game ${otherLive.game_number} is still live; complete it first`,
+      );
+    }
+
+    const existing = match.games.find(
+      (game) => game.game_number === gameNumber,
+    );
+    const now = new Date();
+    const startedAt = dto.started_at
+      ? new Date(dto.started_at)
+      : (existing?.started_at ?? now);
+    const endedAt =
+      dto.status === 'completed'
+        ? dto.ended_at
+          ? new Date(dto.ended_at)
+          : (existing?.ended_at ?? now)
+        : null;
+    const fields = {
+      status: dto.status,
+      winner_team_id: dto.status === 'completed' ? winner : null,
+      started_at: startedAt,
+      ended_at: endedAt,
+      duration_seconds: endedAt
+        ? Math.max(
+            0,
+            Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+          )
+        : null,
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.matchGame.upsert({
+        where: {
+          match_id_game_number: { match_id: id, game_number: gameNumber },
+        },
+        create: { match_id: id, game_number: gameNumber, ...fields },
+        update: fields,
+      });
+      const completed = await tx.matchGame.findMany({
+        where: { match_id: id, status: 'completed' },
+        select: { winner_team_id: true },
+      });
+      await tx.match.update({
+        where: { id },
+        data: {
+          ...(dto.status === 'live' ? { game_number: gameNumber } : {}),
+          score_a: completed.filter((g) => g.winner_team_id === match.team_a_id)
+            .length,
+          score_b: completed.filter((g) => g.winner_team_id === match.team_b_id)
+            .length,
+        },
+      });
+    });
+
+    await this.publishChangedById(id);
+    return this.getDetail(id);
+  }
+
   private async publishChangedById(id: string): Promise<void> {
     const match = await this.prisma.match.findUnique({
       where: { id },
@@ -433,7 +542,7 @@ export class AdminMatchesService {
     const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id },
-        select: { team_a_id: true, team_b_id: true },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
       }),
     );
 
@@ -465,6 +574,8 @@ export class AdminMatchesService {
       damage: snapshot.damage ?? 0,
       damage_taken: snapshot.damage_taken ?? 0,
       level: snapshot.level ?? null,
+      hero: snapshot.hero ?? null,
+      game_number: snapshot.game_number ?? match.game_number ?? 1,
       recorded_at:
         snapshot.recorded_at !== undefined
           ? new Date(snapshot.recorded_at)
@@ -495,6 +606,8 @@ export class AdminMatchesService {
         damage: true,
         damage_taken: true,
         level: true,
+        hero: true,
+        game_number: true,
         recorded_at: true,
       },
     });
@@ -516,7 +629,7 @@ export class AdminMatchesService {
     const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id },
-        select: { team_a_id: true, team_b_id: true },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
       }),
     );
 
@@ -545,6 +658,7 @@ export class AdminMatchesService {
       item_name: purchase.item_name,
       phase: purchase.phase,
       slot: purchase.slot ?? null,
+      game_number: purchase.game_number ?? match.game_number ?? 1,
       purchased_at:
         purchase.purchased_at !== undefined
           ? new Date(purchase.purchased_at)
@@ -573,6 +687,7 @@ export class AdminMatchesService {
         item_name: true,
         phase: true,
         slot: true,
+        game_number: true,
         purchased_at: true,
       },
     });
@@ -594,7 +709,7 @@ export class AdminMatchesService {
     const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id },
-        select: { team_a_id: true, team_b_id: true },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
       }),
     );
 
@@ -634,6 +749,7 @@ export class AdminMatchesService {
         event_type: event.event_type,
         title: event.title,
         details: (event.details ?? {}) as Prisma.InputJsonValue,
+        game_number: event.game_number ?? match.game_number ?? 1,
         occurred_at:
           event.occurred_at !== undefined ? new Date(event.occurred_at) : now,
       })),
@@ -649,6 +765,7 @@ export class AdminMatchesService {
         event_type: true,
         title: true,
         details: true,
+        game_number: true,
         occurred_at: true,
       },
     });

@@ -74,12 +74,12 @@ model Profile {
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
 
-  favorites    Favorite[]
+  favorites          Favorite[]
   push_subscriptions PushSubscription[]
-  watchHistory WatchHistory[]
-  comments     MatchComment[]
-  ticketOrders TicketOrder[]
-  tickets      Ticket[]
+  watchHistory       WatchHistory[]
+  comments           MatchComment[]
+  ticketOrders       TicketOrder[]
+  tickets            Ticket[]
 
   @@map("profiles")
 }
@@ -135,6 +135,7 @@ model Team {
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
   videosWon           Video[]                @relation("VideoWinner")
+  gamesWon            MatchGame[]            @relation("GameWinner")
 
   search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
 
@@ -197,6 +198,7 @@ model Match {
   created_at           DateTime     @default(now())
   updated_at           DateTime     @updatedAt
 
+  games               MatchGame[]
   tournament          Tournament?            @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
   teamA               Team                   @relation("MatchTeamA", fields: [team_a_id], references: [id], onDelete: Restrict)
   teamB               Team                   @relation("MatchTeamB", fields: [team_b_id], references: [id], onDelete: Restrict)
@@ -221,6 +223,32 @@ model Match {
   @@index([team_b_id])
   @@index([winner_team_id])
   @@map("matches")
+}
+
+enum game_status {
+  live
+  completed
+}
+
+/// One game of a series (best_of). The series score derives from completed games.
+model MatchGame {
+  id               String      @id @default(uuid()) @db.Uuid
+  match_id         String      @db.Uuid
+  game_number      Int
+  status           game_status @default(live)
+  winner_team_id   String?     @db.Uuid
+  started_at       DateTime?
+  ended_at         DateTime?
+  duration_seconds Int?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  match  Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  winner Team? @relation("GameWinner", fields: [winner_team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, game_number])
+  @@index([winner_team_id])
+  @@map("match_games")
 }
 
 model MatchTeamStatistic {
@@ -330,6 +358,7 @@ model WatchHistory {
 model MatchGoldSnapshot {
   id          String   @id @default(uuid()) @db.Uuid
   match_id    String   @db.Uuid
+  game_number Int      @default(1)
   team_id     String   @db.Uuid
   gold        Int      @default(0)
   recorded_at DateTime @default(now())
@@ -338,7 +367,7 @@ model MatchGoldSnapshot {
   team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, team_id, recorded_at])
-  @@index([match_id, recorded_at])
+  @@index([match_id, game_number, recorded_at])
   @@index([team_id])
   @@map("match_gold_snapshots")
 }
@@ -346,6 +375,7 @@ model MatchGoldSnapshot {
 model PlayerMatchSnapshot {
   id           String   @id @default(uuid()) @db.Uuid
   match_id     String   @db.Uuid
+  game_number  Int      @default(1)
   player_id    String   @db.Uuid
   team_id      String   @db.Uuid
   kills        Int      @default(0)
@@ -355,6 +385,8 @@ model PlayerMatchSnapshot {
   damage       Int      @default(0)
   damage_taken Int      @default(0)
   level        Int?
+  /// Hero picked for this game (null until the draft is known).
+  hero         String?
   recorded_at  DateTime @default(now())
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
@@ -362,7 +394,7 @@ model PlayerMatchSnapshot {
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, player_id, recorded_at])
-  @@index([match_id, recorded_at])
+  @@index([match_id, game_number, recorded_at])
   @@index([player_id])
   @@index([team_id])
   @@map("player_match_snapshots")
@@ -371,6 +403,7 @@ model PlayerMatchSnapshot {
 model MatchItemEvent {
   id           String           @id @default(uuid()) @db.Uuid
   match_id     String           @db.Uuid
+  game_number  Int              @default(1)
   player_id    String           @db.Uuid
   team_id      String           @db.Uuid
   item_id      String
@@ -384,7 +417,7 @@ model MatchItemEvent {
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, player_id, item_name, purchased_at])
-  @@index([match_id, purchased_at])
+  @@index([match_id, game_number, purchased_at])
   @@index([player_id])
   @@index([team_id])
   @@map("match_item_events")
@@ -393,6 +426,7 @@ model MatchItemEvent {
 model MatchEvent {
   id          String   @id @default(uuid()) @db.Uuid
   match_id    String   @db.Uuid
+  game_number Int      @default(1)
   team_id     String?  @db.Uuid
   player_id   String?  @db.Uuid
   event_type  String
@@ -404,7 +438,7 @@ model MatchEvent {
   team   Team?   @relation(fields: [team_id], references: [id], onDelete: Restrict)
   player Player? @relation(fields: [player_id], references: [id], onDelete: Restrict)
 
-  @@index([match_id, occurred_at])
+  @@index([match_id, game_number, occurred_at])
   @@index([team_id])
   @@index([player_id])
   @@map("match_events")
@@ -663,4 +697,3 @@ model PushSubscription {
   @@index([user_id])
   @@map("push_subscriptions")
 }
-

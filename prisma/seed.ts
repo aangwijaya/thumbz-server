@@ -2,6 +2,7 @@ import {
   match_item_phase,
   match_stage,
   match_status,
+  Prisma,
   PrismaClient,
   tournament_status,
 } from '@prisma/client';
@@ -372,11 +373,79 @@ async function createCompletedStats(
   await prisma.playerMatchStatistic.createMany({ data: rows });
 }
 
-async function createLiveData(match: CreatedMatch): Promise<void> {
-  const started = match.scheduledAt.getTime();
-  const now = Date.now();
-  const minutes = Math.min(30, Math.floor((now - started) / 60_000));
-  if (minutes < 1) return;
+/**
+ * Games of the series (contract §19), consistent with the stored score:
+ * the series winner takes the last game. A live match also gets its current
+ * game, started a few minutes ago. Returns the live game, if any.
+ */
+async function createGames(
+  match: CreatedMatch,
+): Promise<{ gameNumber: number; startedAt: Date } | null> {
+  const row = await prisma.match.findUniqueOrThrow({
+    where: { id: match.id },
+    select: { score_a: true, score_b: true, winner_team_id: true },
+  });
+  const winsA = row.score_a ?? 0;
+  const winsB = row.score_b ?? 0;
+  const seriesWinner = row.winner_team_id;
+  const loser = seriesWinner === match.teamAId ? match.teamBId : match.teamAId;
+  const loserWins = seriesWinner === match.teamAId ? winsB : winsA;
+  const winnerWins = seriesWinner === match.teamAId ? winsA : winsB;
+
+  // Order: loser's wins interleaved early, the winner closes the series.
+  const winners: string[] = [];
+  if (seriesWinner) {
+    for (let i = 0; i < winnerWins - 1; i++) {
+      winners.push(seriesWinner);
+      if (i < loserWins) winners.push(loser);
+    }
+    for (let i = winnerWins - 1; i < loserWins; i++) winners.push(loser);
+    winners.push(seriesWinner);
+  } else {
+    for (let i = 0; i < Math.max(winsA, winsB); i++) {
+      if (i < winsA) winners.push(match.teamAId);
+      if (i < winsB) winners.push(match.teamBId);
+    }
+  }
+
+  const rand = mulberry32(match.scheduledAt.getTime() ^ 0x9e3779b9);
+  const games: Prisma.MatchGameCreateManyInput[] = winners.map((winner, index) => {
+    const startedAt = new Date(match.scheduledAt.getTime() + (10 + index * 25) * 60_000);
+    const duration = randInt(rand, 720, 1260);
+    return {
+      match_id: match.id,
+      game_number: index + 1,
+      status: 'completed',
+      winner_team_id: winner,
+      started_at: startedAt,
+      ended_at: new Date(startedAt.getTime() + duration * 1000),
+      duration_seconds: duration,
+    };
+  });
+
+  let live: { gameNumber: number; startedAt: Date } | null = null;
+  if (match.status === 'live') {
+    live = { gameNumber: games.length + 1, startedAt: new Date(Date.now() - 9 * 60_000) };
+    games.push({
+      match_id: match.id,
+      game_number: live.gameNumber,
+      status: 'live',
+      started_at: live.startedAt,
+    });
+    await prisma.match.update({ where: { id: match.id }, data: { game_number: live.gameNumber } });
+  }
+  if (games.length > 0) await prisma.matchGame.createMany({ data: games });
+  return live;
+}
+
+async function createLiveData(
+  match: CreatedMatch,
+  game: { gameNumber: number; startedAt: Date },
+): Promise<void> {
+  // Everything belongs to the game being played, which started minutes ago.
+  const started = game.startedAt.getTime();
+  const game_number = game.gameNumber;
+  const minutes = Math.max(1, Math.floor((Date.now() - started) / 60_000));
 
   const goldSnapshots = [];
   const points = 8;
@@ -387,6 +456,7 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         match_id: match.id,
         team_id: teamId,
         gold: Math.floor(15000 + ((20000 * i) / points) * (teamId === match.teamAId ? 1 : 0.92)),
+        game_number,
         recorded_at: at,
       });
     }
@@ -400,7 +470,14 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
   const players = await prisma.player.findMany({
     where: { team_id: { in: [match.teamAId, match.teamBId] }, role: { not: 'coach' } },
     select: { id: true, team_id: true, nickname: true },
+    orderBy: { nickname: 'asc' },
   });
+  // One distinct hero per player for this game's draft.
+  const draft = mulberry32(match.id.charCodeAt(0) * 7919 + game_number);
+  const pool = [...HEROES];
+  const heroOf = new Map(
+    players.map((player) => [player.id, pool.splice(randInt(draft, 0, pool.length - 1), 1)[0] ?? 'Ling']),
+  );
   const snapshots = [];
   const purchases = [];
   for (const player of players) {
@@ -419,6 +496,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         damage: 8000 + i * 9000,
         damage_taken: 3000 + i * 3000,
         level: 1 + i * 3,
+        hero: heroOf.get(player.id) ?? null,
+        game_number,
         recorded_at: new Date(started + i * ((minutes / 4) * 60_000)),
       });
     }
@@ -432,7 +511,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         item_id: phase2?.item_id ?? 'fury-hammer',
         item_name: phase2?.item_name ?? 'Fury Hammer',
         phase: 'phase2' as match_item_phase,
-        purchased_at: new Date(started + 4 * 60_000),
+        game_number,
+        purchased_at: new Date(started + 2 * 60_000),
       },
       {
         match_id: match.id,
@@ -442,7 +522,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         item_name: phase3?.item_name ?? 'War Axe',
         phase: 'phase3' as match_item_phase,
         slot: 1,
-        purchased_at: new Date(started + 12 * 60_000),
+        game_number,
+        purchased_at: new Date(started + 6 * 60_000),
       },
     );
   }
@@ -464,7 +545,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         team_id: match.teamAId,
         event_type: 'first_blood',
         title: `${teamA.name} took first blood`,
-        occurred_at: new Date(started + 3 * 60_000),
+        game_number,
+        occurred_at: new Date(started + 2 * 60_000),
       },
       {
         match_id: match.id,
@@ -472,7 +554,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         event_type: 'turtle',
         title: `${teamA.name} secured the first Turtle`,
         details: { objective: 'turtle' },
-        occurred_at: new Date(started + 6 * 60_000),
+        game_number,
+        occurred_at: new Date(started + 4 * 60_000),
       },
       {
         match_id: match.id,
@@ -480,7 +563,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         event_type: 'tower',
         title: `${teamB.name} destroyed the first tower`,
         details: { objective: 'tower', lane: 'gold' },
-        occurred_at: new Date(started + 9 * 60_000),
+        game_number,
+        occurred_at: new Date(started + 6 * 60_000),
       },
       {
         match_id: match.id,
@@ -488,7 +572,8 @@ async function createLiveData(match: CreatedMatch): Promise<void> {
         event_type: 'lord',
         title: `${teamA.name} secured the Lord`,
         details: { objective: 'lord' },
-        occurred_at: new Date(started + 15 * 60_000),
+        game_number,
+        occurred_at: new Date(started + 8 * 60_000),
       },
     ],
   });
@@ -542,9 +627,12 @@ async function main(): Promise<void> {
     });
   }
   if (oldMatches.length > 0) {
-    await prisma.match.deleteMany({
-      where: { id: { in: oldMatches.map((m) => m.id) } },
-    });
+    const oldMatchIds = oldMatches.map((m) => m.id);
+    // Demo purchases block the match delete (Restrict FKs); payments cascade
+    // from their orders.
+    await prisma.ticket.deleteMany({ where: { match_id: { in: oldMatchIds } } });
+    await prisma.ticketOrder.deleteMany({ where: { match_id: { in: oldMatchIds } } });
+    await prisma.match.deleteMany({ where: { id: { in: oldMatchIds } } });
   }
   if (oldPlayerIds.length > 0) {
     await prisma.player.deleteMany({ where: { id: { in: oldPlayerIds } } });
@@ -807,9 +895,10 @@ async function main(): Promise<void> {
     await createCompletedStats(match, playersByTeam);
   }
 
-  // ---- live data for live matches ----
-  for (const match of createdMatches.filter((m) => m.status === 'live')) {
-    await createLiveData(match);
+  // ---- games of each series; live data for the game being played ----
+  for (const match of createdMatches.filter((m) => m.status === 'completed' || m.status === 'live')) {
+    const liveGame = await createGames(match);
+    if (liveGame) await createLiveData(match, liveGame);
   }
 
   // ---- language broadcast variants (MPL ID: id+en, MPL PH: tl+en) ----

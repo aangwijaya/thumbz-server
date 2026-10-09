@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { PaginationMeta } from '../../common/utils/pagination';
-import { MatchEconomyDto } from './dto/match-economy.dto';
+import { MatchEconomyDto, MatchGameQueryDto } from './dto/match-economy.dto';
 import { MatchIdParamsDto } from './dto/match-id-params.dto';
 import { ListMatchesDto } from './dto/list-matches.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
@@ -105,10 +105,13 @@ export class MatchesController {
   @Public()
   @Cached({ ttl: 3, tags: ({ id }) => [CacheTags.matchLive(id)] })
   @Get(':id/equipment')
-  equipment(@Param() params: MatchIdParamsDto): Promise<{
+  equipment(
+    @Param() params: MatchIdParamsDto,
+    @Query() query: MatchGameQueryDto,
+  ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    return this.matchesService.equipment(params.id);
+    return this.matchesService.equipment(params.id, query);
   }
 
   @Public()
@@ -130,7 +133,12 @@ export class MatchesController {
     @Param() params: MatchIdParamsDto,
     @Query() query: MatchEconomyDto,
   ): Promise<{
-    data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
+    data: Array<{
+      team_id: string;
+      gold: number;
+      game_number: number;
+      recorded_at: Date;
+    }>;
   }> {
     return this.matchesService.economy(params.id, query);
   }

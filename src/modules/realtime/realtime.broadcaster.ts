@@ -15,6 +15,13 @@ export interface MatchUpdate {
   viewer_count: number;
   started_at: Date | null;
   ended_at: Date | null;
+  /** Current game and the series so far (contract §19). */
+  game_number: number | null;
+  games: Array<{
+    game_number: number;
+    status: string;
+    winner_team_id: string | null;
+  }>;
 }
 
 /**
@@ -45,6 +52,11 @@ export class RealtimeBroadcaster {
         viewer_count: true,
         started_at: true,
         ended_at: true,
+        game_number: true,
+        games: {
+          orderBy: { game_number: 'asc' },
+          select: { game_number: true, status: true, winner_team_id: true },
+        },
       },
     });
     if (match === null) return; // deleted

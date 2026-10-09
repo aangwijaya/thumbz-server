@@ -265,6 +265,7 @@ See §17 for protected playback.
 | `PUT` | `/admin/matches/:id/equipment` | admin |
 | `PUT` | `/admin/matches/:id/events` | admin |
 | `PUT` | `/admin/matches/:id/broadcasts` | admin |
+| `PUT` | `/admin/matches/:id/games/:gameNumber` | admin |
 | `DELETE` | `/admin/comments/:id` | admin |
 | `PUT` | `/admin/matches/:id/ticket-config` | admin |
 | `GET` | `/admin/orders` | admin |
@@ -385,9 +386,12 @@ See §17 for protected playback.
   "stream_url": "https://... | null",
   "tournament": { "id", "name", "slug", "status", "region" },
   "team_a": { ...TeamSummary, "region": "ID" },
-  "team_b": { ...TeamSummary, "region": "ID" }
+  "team_b": { ...TeamSummary, "region": "ID" },
+  "games": [MatchGame]
 }
 ```
+
+`games` (additive, §19) lists the games of the series played so far, ordered `game_number` asc.
 
 **Errors:** `404 NOT_FOUND` when the match does not exist.
 
@@ -455,6 +459,8 @@ See §17 for protected playback.
 
 #### `GET /matches/:id/economy`
 
+Scoped to one game of the series: `game_number` (query, optional) defaults to the game being played (or the last one). Every row carries `game_number` (§19).
+
 **Purpose:** gold economy trend chart on the streaming page — team gold snapshots over match time.
 
 **Query params:**
@@ -474,6 +480,8 @@ See §17 for protected playback.
 
 #### `GET /matches/:id/live-stats`
 
+Scoped to one game of the series: `game_number` (query, optional) defaults to the game being played (or the last one). Every row carries `game_number` (§19).
+
 **Purpose:** streaming-page live rankings & head-to-head panel — per-player snapshots over match time (kills, gold, damage, damage taken, level).
 
 **Query params:** `from`, `to` (ISO datetime, optional; `recorded_at` window).
@@ -488,6 +496,8 @@ Clients derive current rankings/latest values themselves (the endpoint is a raw,
 
 #### `GET /matches/:id/equipment`
 
+Scoped to one game of the series: `game_number` (query, optional) defaults to the game being played (or the last one). Every row carries `game_number` (§19).
+
 **Purpose:** streaming-page equipment/build timeline — item purchases per player over match time.
 
 **Response:** `{ "data": [ItemPurchase] }` — ordered `purchased_at` asc.
@@ -500,6 +510,8 @@ Clients derive current rankings/latest values themselves (the endpoint is a raw,
 
 #### `GET /matches/:id/events`
 
+Scoped to one game of the series: `game_number` (query, optional) defaults to the game being played (or the last one). Every row carries `game_number` (§19).
+
 **Purpose:** streaming-page live events / objectives feed.
 
 **Query params:** `from`, `to` (ISO datetime, optional; `occurred_at` window).
@@ -510,7 +522,7 @@ Clients derive current rankings/latest values themselves (the endpoint is a raw,
 { "data": [ { "id": "uuid", "team_id": "uuid | null", "player_id": "uuid | null", "event_type": "lord", "title": "ONIC secured the Lord", "details": {}, "occurred_at": "2026-09-05T12:15:00Z" } ] }
 ```
 
-`event_type` is a free-form string (`kill`, `tower`, `lord`, `turtle`, ...); `title` is the display text; `details` is opaque JSONB.
+`event_type` is one of `first_blood`, `kill`, `tower`, `turtle`, `lord`, `other` (§19); `title` is the display text; `details` is opaque JSONB.
 
 #### `GET /matches/:id/broadcasts`
 
@@ -1569,7 +1581,7 @@ Limits: 5 rooms per socket; more than 30 messages per 10 s disconnects the socke
 
 | Event | Room | `data` | Client action |
 | --- | --- | --- | --- |
-| `match:update` | `match:<id>` | `{ id, status, score_a, score_b, winner_team_id, viewer_count, started_at, ended_at }` | apply to the match in place |
+| `match:update` | `match:<id>` | `{ id, status, score_a, score_b, winner_team_id, viewer_count, started_at, ended_at, game_number, games: [{ game_number, status, winner_team_id }] }` | apply to the match in place |
 | `match:live` | `match:<id>` | `{ kind: "economy" \| "live-stats" \| "equipment" \| "events" \| "broadcasts" }` | refetch that sub-resource (notify-then-fetch: the API caches these 3 s with single flight, so N viewers cause one query) |
 | `comment:new` | `match:<id>` | `MatchComment` | append to chat |
 | `comment:deleted` | `match:<id>` | `{ id }` | remove from chat |
@@ -1718,4 +1730,26 @@ Browsers (and installed PWAs, incl. iOS 16.4+ home-screen apps) can receive a re
 ```
 
 `tag` lets a newer notification replace an older one for the same match. Subscriptions the push service reports as gone (`404`/`410`) are deleted automatically.
+
+## 19. Games of a series and per-game live data
+
+A match is a series (`best_of`). Each game is a `MatchGame`:
+
+```json
+{ "game_number": 2, "status": "completed", "winner_team_id": "uuid | null",
+  "started_at": "2026-09-05T12:40:00Z", "ended_at": "2026-09-05T12:58:10Z", "duration_seconds": 1090 }
+```
+
+`status` ∈ `live | completed`. `MatchDetail.games` lists them; the series score is derived from completed games with a winner.
+
+**Admin** — `PUT /admin/matches/:id/games/:gameNumber` with `{ "status": "live" | "completed", "winner_team_id"?: "uuid", "started_at"?: ISO, "ended_at"?: ISO }` (upsert):
+- `gameNumber` ∈ `1..best_of` → else `422`. `winner_team_id` must be team A/B and is required when `status = completed` → else `422`.
+- `live` makes it the match's current game (`game_number`); `started_at` defaults to now. `completed` sets `ended_at` (default now) and `duration_seconds`, then recomputes `score_a`/`score_b` from completed games.
+- Response: `200 { "data": MatchDetail }`; publishes the usual match update (§14).
+
+**Per-game live data** — gold snapshots, player snapshots, item purchases and events carry `game_number`. Ingestion (`PUT /admin/matches/:id/{economy,live-stats,equipment,events}`) accepts an optional `game_number` per row (default: the match's current game, else 1). Reads take `?game_number=` (default: current game, else the highest game with data).
+
+**Player snapshots** (`GET /matches/:id/live-stats`) additionally carry `hero` (string | null, the hero picked for that game) and `player` (`{ id, nickname, role }`), so live rankings render before post-match statistics exist. Ingestion accepts an optional `hero`.
+
+**Event types** — `event_type` ∈ `first_blood`, `kill`, `tower`, `turtle`, `lord`, `other`; `team_id` is required for `first_blood`, `tower`, `turtle` and `lord` → else `400 VALIDATION_ERROR`.
 

@@ -1656,6 +1656,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "game_number",
+            "required": false,
+            "in": "query",
+            "description": "Game of the series (contract §19); default: the current or last game.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -1679,6 +1690,16 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "name": "game_number",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9,
+              "type": "number"
             }
           }
         ],
@@ -1720,6 +1741,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "game_number",
+            "required": false,
+            "in": "query",
+            "description": "Game of the series (contract §19); default: the current or last game.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -1759,6 +1791,17 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "game_number",
+            "required": false,
+            "in": "query",
+            "description": "Game of the series (contract §19); default: the current or last game.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9,
+              "type": "number"
             }
           }
         ],
@@ -2749,6 +2792,55 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpsertBroadcastsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/matches/{id}/games/{gameNumber}": {
+      "put": {
+        "operationId": "Admin_upsertGame",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameNumber",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9,
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertGameDto"
               }
             }
           }
@@ -4047,7 +4139,14 @@
           },
           "event_type": {
             "type": "string",
-            "maxLength": 50
+            "enum": [
+              "first_blood",
+              "kill",
+              "tower",
+              "turtle",
+              "lord",
+              "other"
+            ]
           },
           "title": {
             "type": "string",
@@ -4059,6 +4158,12 @@
           },
           "occurred_at": {
             "type": "string"
+          },
+          "game_number": {
+            "type": "number",
+            "description": "Game of the series (contract §19); default: the match's current game.",
+            "minimum": 1,
+            "maximum": 9
           }
         },
         "required": [
@@ -4112,6 +4217,12 @@
           },
           "purchased_at": {
             "type": "string"
+          },
+          "game_number": {
+            "type": "number",
+            "description": "Game of the series (contract §19); default: the match's current game.",
+            "minimum": 1,
+            "maximum": 9
           }
         },
         "required": [
@@ -4179,6 +4290,18 @@
           },
           "recorded_at": {
             "type": "string"
+          },
+          "game_number": {
+            "type": "number",
+            "description": "Game of the series (contract §19); default: the match's current game.",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "hero": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hero picked for this game (§19).",
+            "maxLength": 40
           }
         },
         "required": [
@@ -4240,6 +4363,31 @@
         },
         "required": [
           "broadcasts"
+        ]
+      },
+      "UpsertGameDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "completed"
+            ]
+          },
+          "winner_team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "ended_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "LiveMatchDto": {
@@ -4408,6 +4556,12 @@
           },
           "recorded_at": {
             "type": "string"
+          },
+          "game_number": {
+            "type": "number",
+            "description": "Game of the series (contract §19); default: the match's current game.",
+            "minimum": 1,
+            "maximum": 9
           }
         },
         "required": [

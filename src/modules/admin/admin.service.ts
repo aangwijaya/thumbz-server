@@ -16,12 +16,17 @@ export class AdminService {
     matchId: string,
     snapshots: GoldSnapshotDto[],
   ): Promise<{
-    data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
+    data: Array<{
+      team_id: string;
+      gold: number;
+      game_number: number;
+      recorded_at: Date;
+    }>;
   }> {
     const match = orNotFound(
       await this.prisma.match.findUnique({
         where: { id: matchId },
-        select: { team_a_id: true, team_b_id: true },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
       }),
     );
 
@@ -36,6 +41,7 @@ export class AdminService {
       match_id: matchId,
       team_id: snapshot.team_id,
       gold: snapshot.gold,
+      game_number: snapshot.game_number ?? match.game_number ?? 1,
       recorded_at:
         snapshot.recorded_at !== undefined
           ? new Date(snapshot.recorded_at)
@@ -58,7 +64,12 @@ export class AdminService {
         })),
       },
       orderBy: { recorded_at: 'asc' },
-      select: { team_id: true, gold: true, recorded_at: true },
+      select: {
+        team_id: true,
+        gold: true,
+        game_number: true,
+        recorded_at: true,
+      },
     });
 
     this.events.emit({ type: 'match.live-data', matchId, kind: 'economy' });
@@ -66,6 +77,7 @@ export class AdminService {
       data: rows.map((row) => ({
         team_id: row.team_id,
         gold: row.gold,
+        game_number: row.game_number,
         recorded_at: row.recorded_at,
       })),
     };

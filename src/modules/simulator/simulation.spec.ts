@@ -1,4 +1,11 @@
-import { seededRandom, SimState, tick } from './simulation';
+import {
+  draftHeroes,
+  resetForNextGame,
+  winsNeeded,
+  seededRandom,
+  SimState,
+  tick,
+} from './simulation';
 
 function initial(): SimState {
   const player = (id: string, team: string) => ({
@@ -69,5 +76,73 @@ describe('live simulation tick', () => {
       }
       state = result.state;
     }
+  });
+});
+
+describe('series helpers', () => {
+  it('drafts one distinct hero per player, from the role pool', () => {
+    const players = [
+      'exp',
+      'jungle',
+      'mid',
+      'gold',
+      'roam',
+      'exp',
+      'jungle',
+      'mid',
+      'gold',
+      'roam',
+    ].map((role, index) => ({ player_id: `p${index}`, role }));
+    const picks = draftHeroes(players, seededRandom(7));
+    expect(Object.keys(picks)).toHaveLength(10);
+    expect(new Set(Object.values(picks)).size).toBe(10);
+    expect([
+      'Fanny',
+      'Ling',
+      'Lancelot',
+      'Hayabusa',
+      'Joy',
+      'Fredrinn',
+    ]).toContain(picks.p1);
+  });
+
+  it('knows how many wins take a series', () => {
+    expect([1, 3, 5, 7].map(winsNeeded)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('resets earnings between games but keeps the lineups', () => {
+    const state = {
+      teamA: 'a',
+      teamB: 'b',
+      gold: { a: 9000, b: 7000 },
+      players: [
+        {
+          player_id: 'p',
+          team_id: 'a',
+          kills: 4,
+          deaths: 1,
+          assists: 2,
+          gold: 9000,
+          level: 13,
+        },
+      ],
+      objectivesTaken: 3,
+    };
+    expect(resetForNextGame(state)).toEqual({
+      ...state,
+      gold: { a: 0, b: 0 },
+      players: [
+        {
+          player_id: 'p',
+          team_id: 'a',
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          gold: 0,
+          level: 1,
+        },
+      ],
+      objectivesTaken: 0,
+    });
   });
 });
