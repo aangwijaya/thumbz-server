@@ -199,7 +199,7 @@ export class LiveSimulatorService {
       });
       this.sims.delete(matchId);
       this.logger.log(`series ${matchId} finished ${scoreA}-${scoreB}`);
-      await this.promoteNextScheduled();
+      await this.promoteNextScheduled(matchId);
       return;
     }
 
@@ -212,13 +212,36 @@ export class LiveSimulatorService {
     sim.firstBloodPending = true;
   }
 
-  private async promoteNextScheduled(): Promise<void> {
-    const next = await this.prisma.match.findFirst({
-      where: { status: 'scheduled' },
-      orderBy: { scheduled_at: 'asc' },
-      select: { id: true },
+  /**
+   * The next scheduled match goes live on the channel the finished match
+   * used (its stream and commentary feeds), like a league broadcast would.
+   */
+  private async promoteNextScheduled(finishedId: string): Promise<void> {
+    const [next, finished] = await Promise.all([
+      this.prisma.match.findFirst({
+        where: { status: 'scheduled' },
+        orderBy: { scheduled_at: 'asc' },
+        select: { id: true },
+      }),
+      this.prisma.match.findUnique({
+        where: { id: finishedId },
+        select: {
+          stream_url: true,
+          broadcasts: { select: { language: true, stream_url: true } },
+        },
+      }),
+    ]);
+    if (!next) return;
+    if (finished && finished.broadcasts.length > 0) {
+      await this.matches.upsertBroadcasts(
+        next.id,
+        finished.broadcasts.map((feed) => ({ ...feed, viewer_count: 0 })),
+      );
+    }
+    await this.matches.setLive(next.id, {
+      status: 'live',
+      stream_url: finished?.stream_url ?? undefined,
     });
-    if (next) await this.matches.setLive(next.id, { status: 'live' });
   }
 
   private gameLength(): number {

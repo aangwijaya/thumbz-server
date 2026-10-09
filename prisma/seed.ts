@@ -1065,9 +1065,9 @@ async function main(): Promise<void> {
       },
     });
   }
-  for (const upcoming of createdMatches
-    .filter((m) => m.status === 'scheduled')
-    .slice(0, 2)) {
+  // Every upcoming match sells tickets: the demo simulator brings scheduled
+  // matches live over time, so a few would soon run out.
+  for (const upcoming of createdMatches.filter((m) => m.status === 'scheduled')) {
     await prisma.matchTicketConfig.upsert({
       where: { match_id: upcoming.id },
       update: {
