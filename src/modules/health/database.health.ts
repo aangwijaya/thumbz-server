@@ -1,26 +1,31 @@
-import {
-  HealthCheckError,
-  HealthIndicator,
-  HealthIndicatorResult,
-} from '@nestjs/terminus';
 import { Injectable } from '@nestjs/common';
+import { HealthIndicatorService } from '@nestjs/terminus';
 import { PrismaService } from '../../prisma/prisma.service';
 
-@Injectable()
-export class DatabaseHealthIndicator extends HealthIndicator {
-  constructor(private readonly prisma: PrismaService) {
-    super();
-  }
+const PING_TIMEOUT_MS = 2_000;
 
-  async pingCheck(key: string): Promise<HealthIndicatorResult> {
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+@Injectable()
+export class DatabaseHealthIndicator {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly indicators: HealthIndicatorService,
+  ) {}
+
+  async pingCheck<const Key extends string>(key: Key) {
+    const indicator = this.indicators.check(key);
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return this.getStatus(key, true);
+      await withTimeout(this.prisma.$queryRaw`SELECT 1`, PING_TIMEOUT_MS);
+      return indicator.up();
     } catch {
-      throw new HealthCheckError(
-        `${key} check failed`,
-        this.getStatus(key, false),
-      );
+      return indicator.down();
     }
   }
 }

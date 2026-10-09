@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { TournamentSummary } from '../tournaments/tournaments.service';
 import { AdminTournamentsService } from './admin-tournaments.service';
@@ -15,6 +16,8 @@ import { AdminIdParamsDto } from './dto/admin-id-params.dto';
 import { CreateTournamentDto } from './dto/create-tournament.dto';
 import { UpdateTournamentDto } from './dto/update-tournament.dto';
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin/tournaments')
 export class AdminTournamentsController {
   constructor(private readonly adminTournaments: AdminTournamentsService) {}

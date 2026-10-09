@@ -1,11 +1,11 @@
 import { IsEnum, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { player_role } from '@prisma/client';
-import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
+import { CursorPageQueryDto } from '../../../common/dto/pagination.dto';
 
 const SORT_KEYS = ['nickname'] as const;
 const ORDERS = ['asc', 'desc'] as const;
 
-export class ListPlayersDto extends PaginationQueryDto {
+export class ListPlayersDto extends CursorPageQueryDto {
   @IsOptional()
   @IsUUID()
   team_id?: string;

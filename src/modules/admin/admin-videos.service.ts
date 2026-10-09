@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
   VIDEO_INCLUDE,
@@ -8,10 +8,15 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminVideosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async create(dto: CreateVideoDto): Promise<{ data: VideoSummary }> {
     await this.ensureMatchExists(dto.match_id);
@@ -36,6 +41,7 @@ export class AdminVideosService {
       include: VIDEO_INCLUDE,
     });
 
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id: row.id });
     return { data: toVideoSummary(row) };
   }
 
@@ -43,18 +49,17 @@ export class AdminVideosService {
     id: string,
     dto: UpdateVideoDto,
   ): Promise<{ data: VideoSummary }> {
-    const existing = await this.prisma.video.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        match_id: true,
-        winning_team_id: true,
-        game_number: true,
-      },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const existing = orNotFound(
+      await this.prisma.video.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          match_id: true,
+          winning_team_id: true,
+          game_number: true,
+        },
+      }),
+    );
     await this.ensureMatchExists(dto.match_id);
 
     const finalMatchId =
@@ -90,19 +95,20 @@ export class AdminVideosService {
       include: VIDEO_INCLUDE,
     });
 
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id: row.id });
     return { data: toVideoSummary(row) };
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.video.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.video.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     await this.prisma.video.delete({ where: { id } });
+    this.events.emit({ type: 'catalog.changed', entity: 'video', id });
   }
 
   private async ensureResultValid(
@@ -118,13 +124,12 @@ export class AdminVideosService {
         'winning_team_id requires match_id and game_number',
       );
     }
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
     if (
       winningTeamId !== match.team_a_id &&
       winningTeamId !== match.team_b_id
@@ -141,12 +146,11 @@ export class AdminVideosService {
     if (matchId === undefined || matchId === null) {
       return;
     }
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true },
+      }),
+    );
   }
 }

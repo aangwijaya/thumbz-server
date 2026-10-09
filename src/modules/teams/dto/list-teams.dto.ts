@@ -1,10 +1,10 @@
 import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
-import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
+import { CursorPageQueryDto } from '../../../common/dto/pagination.dto';
 
 const SORT_KEYS = ['name', 'created_at'] as const;
 const ORDERS = ['asc', 'desc'] as const;
 
-export class ListTeamsDto extends PaginationQueryDto {
+export class ListTeamsDto extends CursorPageQueryDto {
   @IsOptional()
   @IsString()
   region?: string;

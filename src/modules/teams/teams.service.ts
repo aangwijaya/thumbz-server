@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { player_role, Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -12,6 +12,8 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListTeamsDto } from './dto/list-teams.dto';
 import { TeamMatchesDto } from './dto/team-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const SUMMARY_SELECT = {
   id: true,
@@ -126,9 +128,7 @@ export class TeamsService {
 
   async list(
     query: ListTeamsDto,
-  ): Promise<{ data: TeamSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
+  ): Promise<{ data: TeamSummary[]; meta: ListMeta }> {
     const sort = query.sort ?? 'name';
     const order = query.order ?? 'asc';
 
@@ -141,39 +141,37 @@ export class TeamsService {
       ];
     }
 
-    const orderBy: Prisma.TeamOrderByWithRelationInput =
-      sort === 'created_at' ? { created_at: order } : { name: order };
+    const { rows, meta } = await findPage({
+      query,
+      sort:
+        sort === 'created_at'
+          ? { field: 'created_at', order, type: 'date' }
+          : { field: 'name', order, type: 'string' },
+      where,
+      findMany: (args) =>
+        this.prisma.team.findMany({
+          ...(args as Prisma.TeamFindManyArgs),
+          select: { ...SUMMARY_SELECT, created_at: true },
+        }),
+      count: (filter) => this.prisma.team.count({ where: filter }),
+      sortValue: (row) => (sort === 'created_at' ? row.created_at : row.name),
+    });
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.team.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: SUMMARY_SELECT,
-      }),
-      this.prisma.team.count({ where }),
-    ]);
-
-    return {
-      data: rows.map(toTeamSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toTeamSummary), meta };
   }
 
   async get(id: string): Promise<{ data: TeamDetail }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: {
-        ...SUMMARY_SELECT,
-        description: true,
-        founded_year: true,
-        created_at: true,
-      },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    const team = orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: {
+          ...SUMMARY_SELECT,
+          description: true,
+          founded_year: true,
+          created_at: true,
+        },
+      }),
+    );
 
     const involvedWhere: Prisma.MatchWhereInput = {
       OR: [{ team_a_id: id }, { team_b_id: id }],
@@ -234,13 +232,12 @@ export class TeamsService {
     id: string,
     query: TeamMatchesDto,
   ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -274,13 +271,12 @@ export class TeamsService {
   }
 
   async statistics(id: string): Promise<{ data: TeamStatistics }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const involvedWhere: Prisma.MatchWhereInput = {
       OR: [{ team_a_id: id }, { team_b_id: id }],
@@ -345,13 +341,12 @@ export class TeamsService {
   }
 
   async roster(id: string): Promise<{ data: RosterPlayer[] }> {
-    const team = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     // role order follows the DB enum declaration order, which matches the
     // contract order: gold, mid, exp, jungle, roam, flex, coach

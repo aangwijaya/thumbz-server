@@ -9,15 +9,21 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AdminIdParamsDto } from '../admin/dto/admin-id-params.dto';
 import { MatchIdParamsDto } from '../matches/dto/match-id-params.dto';
-import { CommentsService, MatchComment } from './comments.service';
+import {
+  CommentsMeta,
+  CommentsService,
+  MatchComment,
+} from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ListCommentsDto } from './dto/list-comments.dto';
 
+@ApiTags('matches')
 @Controller('matches')
 export class MatchCommentsController {
   constructor(private readonly comments: CommentsService) {}
@@ -29,11 +35,12 @@ export class MatchCommentsController {
     @Query() query: ListCommentsDto,
   ): Promise<{
     data: MatchComment[];
-    meta: { next_cursor: string | null; total: number };
+    meta: CommentsMeta;
   }> {
     return this.comments.list(params.id, query);
   }
 
+  @ApiBearerAuth()
   @Post(':id/comments')
   create(
     @Param() params: MatchIdParamsDto,
@@ -44,6 +51,8 @@ export class MatchCommentsController {
   }
 }
 
+@ApiTags('me')
+@ApiBearerAuth()
 @Controller('me/comments')
 export class MyCommentsController {
   constructor(private readonly comments: CommentsService) {}
@@ -58,6 +67,8 @@ export class MyCommentsController {
   }
 }
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin/comments')
 export class AdminCommentsController {
   constructor(private readonly comments: CommentsService) {}

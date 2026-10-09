@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -6,8 +6,10 @@ import {
 } from '../../common/utils/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListMatchesDto } from './dto/list-matches.dto';
-import { MatchEconomyDto } from './dto/match-economy.dto';
+import { MatchEconomyDto, MatchGameQueryDto } from './dto/match-economy.dto';
 import { UpcomingMatchesDto } from './dto/upcoming-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const SUMMARY_INCLUDE = {
   tournament: { select: { id: true, name: true, slug: true } },
@@ -67,6 +69,17 @@ export const DETAIL_INCLUDE = {
     orderBy: { viewer_count: 'desc' },
     select: { language: true, stream_url: true, viewer_count: true },
   },
+  games: {
+    orderBy: { game_number: 'asc' },
+    select: {
+      game_number: true,
+      status: true,
+      winner_team_id: true,
+      started_at: true,
+      ended_at: true,
+      duration_seconds: true,
+    },
+  },
 } satisfies Prisma.MatchInclude;
 
 type SummaryRow = Prisma.MatchGetPayload<{ include: typeof SUMMARY_INCLUDE }>;
@@ -115,8 +128,19 @@ export interface MatchSummary {
   broadcasts: BroadcastSummary[];
 }
 
+/** One game of the series (contract §19). */
+export interface MatchGame {
+  game_number: number;
+  status: 'live' | 'completed';
+  winner_team_id: string | null;
+  started_at: Date | null;
+  ended_at: Date | null;
+  duration_seconds: number | null;
+}
+
 export interface MatchDetail extends MatchSummary {
   stream_url: string | null;
+  games: MatchGame[];
   tournament: {
     id: string;
     name: string;
@@ -186,6 +210,7 @@ export function toMatchDetail(row: DetailRow): MatchDetail {
   return {
     ...toMatchSummary(row),
     stream_url: row.stream_url,
+    games: row.games.map((game) => ({ ...game })),
     tournament: row.tournament,
     team_a: {
       id: row.teamA.id,
@@ -216,9 +241,7 @@ export class MatchesService {
 
   async list(
     query: ListMatchesDto,
-  ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
+  ): Promise<{ data: MatchSummary[]; meta: ListMeta }> {
     const sort = query.sort ?? 'scheduled_at';
     const order = query.order ?? 'asc';
 
@@ -236,26 +259,24 @@ export class MatchesService {
       where.scheduled_at = scheduledAt;
     }
 
-    const orderBy: Prisma.MatchOrderByWithRelationInput =
-      sort === 'viewer_count'
-        ? { viewer_count: order }
-        : { scheduled_at: order };
+    const { rows, meta } = await findPage({
+      query,
+      sort:
+        sort === 'viewer_count'
+          ? { field: 'viewer_count', order, type: 'number' }
+          : { field: 'scheduled_at', order, type: 'date' },
+      where,
+      findMany: (args) =>
+        this.prisma.match.findMany({
+          ...(args as Prisma.MatchFindManyArgs),
+          include: SUMMARY_INCLUDE,
+        }),
+      count: (filter) => this.prisma.match.count({ where: filter }),
+      sortValue: (row) =>
+        sort === 'viewer_count' ? row.viewer_count : row.scheduled_at,
+    });
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.match.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: SUMMARY_INCLUDE,
-      }),
-      this.prisma.match.count({ where }),
-    ]);
-
-    return {
-      data: rows.map(toMatchSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toMatchSummary), meta };
   }
 
   async live(
@@ -323,33 +344,31 @@ export class MatchesService {
   }
 
   async get(id: string): Promise<{ data: MatchDetail }> {
-    const row = await this.prisma.match.findUnique({
-      where: { id },
-      include: DETAIL_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        include: DETAIL_INCLUDE,
+      }),
+    );
     return { data: toMatchDetail(row) };
   }
 
-  async statistics(id: string): Promise<{
+  async statistics(
+    id: string,
+    requestedGame?: number,
+  ): Promise<{
     data: {
       match_id: string;
+      game_number: number;
       teams: Array<Record<string, unknown>>;
       players: Array<Record<string, unknown>>;
     };
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    // Statistics are per game (§19); gameOf also answers 404.
+    const game = await this.gameOf(id, requestedGame);
 
     const teamRows = await this.prisma.matchTeamStatistic.findMany({
-      where: { match_id: id },
+      where: { match_id: id, game_number: game },
       orderBy: { team_id: 'asc' },
       include: {
         team: {
@@ -364,7 +383,7 @@ export class MatchesService {
       },
     });
     const playerRows = await this.prisma.playerMatchStatistic.findMany({
-      where: { match_id: id },
+      where: { match_id: id, game_number: game },
       orderBy: { player: { nickname: 'asc' } },
       include: {
         player: {
@@ -382,6 +401,7 @@ export class MatchesService {
     return {
       data: {
         match_id: id,
+        game_number: game,
         teams: teamRows.map((row) => ({
           team_id: row.team_id,
           team: row.team,
@@ -405,6 +425,11 @@ export class MatchesService {
           damage_taken: row.damage_taken,
           level: row.level,
           hero_picked: row.hero_picked,
+          hero_icon_url: row.hero_icon_url,
+          tower_damage: row.tower_damage,
+          emblem: row.emblem,
+          talents: row.talents ?? [],
+          items: row.items ?? [],
           mvp: row.mvp,
           details: row.details,
         })),
@@ -413,16 +438,17 @@ export class MatchesService {
   }
 
   async roster(id: string): Promise<{ data: Array<Record<string, unknown>> }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
+    // Rows are per game (§19): one entry per player across the series.
     const rows = await this.prisma.playerMatchStatistic.findMany({
       where: { match_id: id },
+      distinct: ['player_id'],
       orderBy: { player: { nickname: 'asc' } },
       include: {
         player: {
@@ -461,13 +487,12 @@ export class MatchesService {
   }
 
   async history(id: string): Promise<{ data: MatchSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
 
     const rows = await this.prisma.match.findMany({
       where: {
@@ -487,18 +512,17 @@ export class MatchesService {
   }
 
   async related(id: string): Promise<{ data: MatchSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        team_a_id: true,
-        team_b_id: true,
-        tournament_id: true,
-      },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          team_a_id: true,
+          team_b_id: true,
+          tournament_id: true,
+        },
+      }),
+    );
 
     const teamIds = [match.team_a_id, match.team_b_id];
     const candidates = await this.prisma.match.findMany({
@@ -544,17 +568,19 @@ export class MatchesService {
     id: string,
     query: MatchEconomyDto,
   ): Promise<{
-    data: Array<{ team_id: string; gold: number; recorded_at: Date }>;
+    data: Array<{
+      team_id: string;
+      gold: number;
+      game_number: number;
+      recorded_at: Date;
+    }>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const game = await this.gameOf(id, query.game_number);
 
-    const where: Prisma.MatchGoldSnapshotWhereInput = { match_id: id };
+    const where: Prisma.MatchGoldSnapshotWhereInput = {
+      match_id: id,
+      game_number: game,
+    };
     const recordedAt: Prisma.DateTimeFilter = {};
     if (query.from) recordedAt.gte = new Date(query.from);
     if (query.to) recordedAt.lte = new Date(query.to);
@@ -565,13 +591,19 @@ export class MatchesService {
     const rows = await this.prisma.matchGoldSnapshot.findMany({
       where,
       orderBy: { recorded_at: 'asc' },
-      select: { team_id: true, gold: true, recorded_at: true },
+      select: {
+        team_id: true,
+        gold: true,
+        game_number: true,
+        recorded_at: true,
+      },
     });
 
     return {
       data: rows.map((row) => ({
         team_id: row.team_id,
         gold: row.gold,
+        game_number: row.game_number,
         recorded_at: row.recorded_at,
       })),
     };
@@ -583,15 +615,12 @@ export class MatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const game = await this.gameOf(id, query.game_number);
 
-    const where: Prisma.PlayerMatchSnapshotWhereInput = { match_id: id };
+    const where: Prisma.PlayerMatchSnapshotWhereInput = {
+      match_id: id,
+      game_number: game,
+    };
     const recordedAt: Prisma.DateTimeFilter = {};
     if (query.from) recordedAt.gte = new Date(query.from);
     if (query.to) recordedAt.lte = new Date(query.to);
@@ -612,26 +641,28 @@ export class MatchesService {
         damage: true,
         damage_taken: true,
         level: true,
+        hero: true,
+        hero_icon_url: true,
+        game_number: true,
         recorded_at: true,
+        // Live rankings render before post-match statistics exist (§19).
+        player: { select: { id: true, nickname: true, role: true } },
       },
     });
 
     return { data: rows.map((row) => ({ ...row })) };
   }
 
-  async equipment(id: string): Promise<{
+  async equipment(
+    id: string,
+    query: MatchGameQueryDto,
+  ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const game = await this.gameOf(id, query.game_number);
 
     const rows = await this.prisma.matchItemEvent.findMany({
-      where: { match_id: id },
+      where: { match_id: id, game_number: game },
       orderBy: { purchased_at: 'asc' },
       select: {
         player_id: true,
@@ -640,6 +671,9 @@ export class MatchesService {
         item_name: true,
         phase: true,
         slot: true,
+        tier: true,
+        icon_url: true,
+        game_number: true,
         purchased_at: true,
       },
     });
@@ -653,15 +687,12 @@ export class MatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const game = await this.gameOf(id, query.game_number);
 
-    const where: Prisma.MatchEventWhereInput = { match_id: id };
+    const where: Prisma.MatchEventWhereInput = {
+      match_id: id,
+      game_number: game,
+    };
     const occurredAt: Prisma.DateTimeFilter = {};
     if (query.from) occurredAt.gte = new Date(query.from);
     if (query.to) occurredAt.lte = new Date(query.to);
@@ -679,6 +710,7 @@ export class MatchesService {
         event_type: true,
         title: true,
         details: true,
+        game_number: true,
         occurred_at: true,
       },
     });
@@ -686,14 +718,34 @@ export class MatchesService {
     return { data: rows.map((row) => ({ ...row })) };
   }
 
+  /**
+   * The game a live-data read is about (contract §19): the requested one,
+   * else the match's current game, else its last recorded game, else 1.
+   */
+  async gameOf(id: string, requested?: number): Promise<number> {
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          game_number: true,
+          games: {
+            orderBy: { game_number: 'desc' },
+            take: 1,
+            select: { game_number: true },
+          },
+        },
+      }),
+    );
+    return requested ?? match.game_number ?? match.games[0]?.game_number ?? 1;
+  }
+
   async broadcasts(id: string): Promise<{ data: BroadcastSummary[] }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.prisma.matchBroadcast.findMany({
       where: { match_id: id },

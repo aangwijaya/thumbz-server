@@ -5,7 +5,11 @@ import {
   IsISO8601,
   IsInt,
   IsOptional,
+  IsString,
   IsUUID,
+  IsUrl,
+  Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -55,6 +59,23 @@ export class PlayerSnapshotDto {
   @IsOptional()
   @IsISO8601()
   recorded_at?: string;
+
+  /** Game of the series (contract §19); default: the match's current game. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  game_number?: number;
+
+  /** Hero picked for this game (§19). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  hero?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  hero_icon_url?: string | null;
 }
 
 export class UpsertLiveStatsDto {

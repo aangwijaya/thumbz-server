@@ -55,7 +55,7 @@ describe('buildValidationDetails', () => {
 describe('createValidationPipe', () => {
   it('produces a BadRequestException with details on failure', () => {
     const pipe = createValidationPipe();
-    const exception = pipe.exceptionFactory([
+    const exception = pipe['exceptionFactory']([
       constraintError('page', 'page must not be less than 1'),
     ]) as BadRequestException;
 

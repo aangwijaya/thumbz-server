@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { VideoSummary } from '../videos/videos.service';
 import { AdminVideosService } from './admin-videos.service';
@@ -15,6 +16,8 @@ import { AdminIdParamsDto } from './dto/admin-id-params.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin/videos')
 export class AdminVideosController {
   constructor(private readonly adminVideos: AdminVideosService) {}

@@ -7,6 +7,7 @@ import {
   Param,
   Put,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CurrentUser,
   CurrentUser as CurrentUserPayload,
@@ -14,6 +15,8 @@ import {
 import { FavoriteTargetParamsDto } from './dto/favorite-target-params.dto';
 import { Favorite, FavoritesService } from './favorites.service';
 
+@ApiTags('me')
+@ApiBearerAuth()
 @Controller('me/favorites')
 export class FavoritesController {
   constructor(private readonly favoritesService: FavoritesService) {}
