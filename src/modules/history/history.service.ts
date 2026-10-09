@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -10,6 +10,7 @@ import {
   toMatchSummary,
 } from '../matches/matches.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { orNotFound } from '../../common/utils/not-found';
 
 export interface WatchHistoryItem {
   match_id: string;
@@ -67,13 +68,12 @@ export class HistoryService {
     durationSeconds?: number,
     totalSeconds?: number,
   ): Promise<{ data: WatchHistoryItem }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true },
+      }),
+    );
 
     await this.prisma.watchHistory.upsert({
       where: {

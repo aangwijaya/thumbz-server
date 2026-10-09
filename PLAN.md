@@ -3,7 +3,7 @@
 > **NestJS backend for THUMBZ. This plan is the primary execution guide for the server implementation agent.**
 >
 > Authoritative inputs:
-> 1. `../docs/API-CONTRACT.md` — the API the server MUST implement.
+> 1. `docs/API-CONTRACT.md` — the API the server MUST implement.
 > 2. `design/design.md` — NOTE: currently a verbatim copy of the client's visual design document. It contains **no backend-specific requirements**. Backend requirements are therefore derived from the product identity and feature sections of that document (matches, tournaments, teams, players, statistics, streams, videos, authenticated favorites/watch history) and are fully formalized in the API contract. If a product question is not answered by the API contract, ask the planner — do not invent requirements.
 
 ---

@@ -5,83 +5,50 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { bearerToken, JwtVerifierService } from '../auth/jwt-verifier.service';
+import { CurrentUser } from '../decorators/current-user.decorator';
 import { OPTIONAL_AUTH_KEY } from '../decorators/optional-auth.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
-export const SUPABASE_AUDIENCE = 'authenticated';
+export { SUPABASE_AUDIENCE } from '../auth/jwt-verifier.service';
 
 interface JwtRequest {
   headers?: Record<string, string | string[] | undefined>;
-  user?: { sub: string; name?: string };
+  user?: CurrentUser;
 }
 
-function displayName(payload: Record<string, unknown>): string | undefined {
-  const metadata = payload.user_metadata;
-  if (typeof metadata !== 'object' || metadata === null) {
-    return undefined;
-  }
-  const record = metadata as Record<string, unknown>;
-  for (const key of ['full_name', 'name', 'display_name', 'username']) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim() !== '') {
-      return value.trim().slice(0, 80);
-    }
-  }
-  return undefined;
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   private readonly logger = new Logger(JwtAuthGuard.name);
-  private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
-  private readonly issuer: string;
 
   constructor(
     private readonly reflector: Reflector,
-    config: ConfigService,
-  ) {
-    const jwksUrl = config.get<string>('supabaseJwksUrl') as string;
-    this.jwks = createRemoteJWKSet(new URL(jwksUrl));
-    this.issuer = `${new URL(jwksUrl).origin}/auth/v1`;
-  }
+    private readonly verifier: JwtVerifierService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const handler = context.getHandler();
-    const controller = context.getClass();
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      handler,
-      controller,
-    ]);
-    if (isPublic) {
+    const targets = [context.getHandler(), context.getClass()];
+    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest<JwtRequest>();
-    const token = this.extractToken(request);
+    const token = bearerToken(request?.headers?.authorization);
 
-    const isOptionalAuth = this.reflector.getAllAndOverride<boolean>(
-      OPTIONAL_AUTH_KEY,
-      [handler, controller],
-    );
-    if (isOptionalAuth) {
-      if (token === null) {
-        return true;
-      }
-      try {
-        const { payload } = await this.verify(token);
-        if (typeof payload.sub === 'string') {
-          request.user = {
-            sub: payload.sub,
-            name: displayName(payload),
-          };
+    if (this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH_KEY, targets)) {
+      if (token !== null) {
+        try {
+          request.user = await this.verifier.verify(token);
+        } catch (error) {
+          this.logger.warn(
+            `Optional JWT verification failed: ${reason(error)}`,
+          );
         }
-      } catch (error) {
-        this.logger.warn(
-          `Optional JWT verification failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
       }
       return true;
     }
@@ -89,40 +56,12 @@ export class JwtAuthGuard implements CanActivate {
     if (token === null) {
       throw new UnauthorizedException();
     }
-
     try {
-      const { payload } = await this.verify(token);
-      if (typeof payload.sub !== 'string') {
-        throw new UnauthorizedException();
-      }
-      request.user = {
-        sub: payload.sub,
-        name: displayName(payload),
-      };
+      request.user = await this.verifier.verify(token);
     } catch (error) {
-      this.logger.warn(
-        `JWT verification failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.logger.warn(`JWT verification failed: ${reason(error)}`);
       throw new UnauthorizedException();
     }
     return true;
-  }
-
-  private verify(token: string) {
-    return jwtVerify(token, this.jwks, {
-      issuer: this.issuer,
-      audience: SUPABASE_AUDIENCE,
-    });
-  }
-
-  private extractToken(request: JwtRequest): string | null {
-    const authorization = request?.headers?.authorization;
-    if (
-      typeof authorization !== 'string' ||
-      !authorization.startsWith('Bearer ')
-    ) {
-      return null;
-    }
-    return authorization.slice('Bearer '.length).trim();
   }
 }

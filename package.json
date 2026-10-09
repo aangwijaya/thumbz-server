@@ -17,23 +17,51 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "openapi:export": "nest build && node dist/scripts/export-openapi.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "start:worker": "nest start --entryFile worker",
+    "start:worker:dev": "nest start --watch --entryFile worker",
+    "start:worker:prod": "node dist/worker",
+    "media:package": "bash scripts/media/package.sh",
+    "media:register": "ts-node scripts/media/register.ts",
+    "load:ws": "node load/ws-fanout.mjs",
+    "data:fetch": "ts-node --transpile-only scripts/data/mpl-ph/fetch.ts",
+    "data:build": "ts-node --transpile-only scripts/data/mpl-ph/build.ts"
   },
   "dependencies": {
+    "@nest-lab/throttler-storage-redis": "^1.2.0",
+    "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/event-emitter": "^3.1.0",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.2.7",
+    "@nestjs/swagger": "^11.4.7",
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
+    "@nestjs/websockets": "^11.2.7",
     "@prisma/client": "^6.12.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@socket.io/redis-emitter": "^5.1.0",
+    "bullmq": "^5.81.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "jose": "^4.15.9",
+    "nestjs-pino": "^5.3.1",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
     "prisma": "^6.12.0",
+    "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
+    "web-push": "^3.6.7",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -45,12 +73,16 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
+    "@types/web-push": "^3.6.4",
+    "cheerio": "^1.2.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^17.0.0",
     "jest": "^30.0.0",
+    "pino-pretty": "^13.2.0",
     "prettier": "^3.4.2",
+    "socket.io-client": "^4.8.4",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
@@ -77,7 +109,22 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "testTimeout": 30000,
-    "maxWorkers": 6
+    "maxWorkers": 6,
+    "setupFiles": [
+      "<rootDir>/../test/setup-env.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 35,
+        "statements": 35,
+        "functions": 35,
+        "branches": 30
+      }
+    },
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../scripts"
+    ]
   },
   "allowScripts": {
     "prisma@6.19.3": true,

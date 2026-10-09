@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
   SUMMARY_SELECT as TEAM_SUMMARY_SELECT,
@@ -8,10 +8,15 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminTeamsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async create(dto: CreateTeamDto): Promise<{ data: TeamSummary }> {
     await this.prisma.team.create({
@@ -29,17 +34,16 @@ export class AdminTeamsService {
       },
     });
 
-    return this.getSummary(dto.slug, 'slug');
+    return this.publish(await this.getSummary(dto.slug, 'slug'));
   }
 
   async update(id: string, dto: UpdateTeamDto): Promise<{ data: TeamSummary }> {
-    const existing = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     await this.prisma.team.update({
       where: { id },
@@ -65,17 +69,16 @@ export class AdminTeamsService {
       },
     });
 
-    return this.getSummary(id, 'id');
+    return this.publish(await this.getSummary(id, 'id'));
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.team.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const [matchCount, playerCount] = await Promise.all([
       this.prisma.match.count({
@@ -92,19 +95,28 @@ export class AdminTeamsService {
     }
 
     await this.prisma.team.delete({ where: { id } });
+    this.events.emit({ type: 'catalog.changed', entity: 'team', id });
+  }
+
+  private publish(result: { data: TeamSummary }): { data: TeamSummary } {
+    this.events.emit({
+      type: 'catalog.changed',
+      entity: 'team',
+      id: result.data.id,
+    });
+    return result;
   }
 
   private async getSummary(
     value: string,
     key: 'id' | 'slug',
   ): Promise<{ data: TeamSummary }> {
-    const row = await this.prisma.team.findUnique({
-      where: key === 'id' ? { id: value } : { slug: value },
-      select: TEAM_SUMMARY_SELECT,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.team.findUnique({
+        where: key === 'id' ? { id: value } : { slug: value },
+        select: TEAM_SUMMARY_SELECT,
+      }),
+    );
     return { data: toTeamSummary(row) };
   }
 }

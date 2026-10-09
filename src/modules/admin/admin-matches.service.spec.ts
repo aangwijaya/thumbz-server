@@ -2,6 +2,8 @@ import { NotFoundException } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import { AdminMatchesService } from './admin-matches.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MatchesService } from '../matches/matches.service';
+import { testEvents } from '../../infra/events/testing';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -19,7 +21,11 @@ describe('AdminMatchesService (integration, local Postgres)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaService();
-    adminMatches = new AdminMatchesService(prisma);
+    adminMatches = new AdminMatchesService(
+      prisma,
+      new MatchesService(prisma),
+      testEvents(),
+    );
 
     // clean leftovers from interrupted runs
     const oldTeams = await prisma.team.findMany({

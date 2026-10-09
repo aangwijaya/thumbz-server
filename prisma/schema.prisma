@@ -74,11 +74,12 @@ model Profile {
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
 
-  favorites    Favorite[]
-  watchHistory WatchHistory[]
-  comments     MatchComment[]
-  ticketOrders TicketOrder[]
-  tickets      Ticket[]
+  favorites          Favorite[]
+  push_subscriptions PushSubscription[]
+  watchHistory       WatchHistory[]
+  comments           MatchComment[]
+  ticketOrders       TicketOrder[]
+  tickets            Ticket[]
 
   @@map("profiles")
 }
@@ -100,7 +101,11 @@ model Tournament {
 
   matches Match[]
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([status, start_date(sort: Desc)])
+  @@index([search_document], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "tournaments_name_trgm_idx")
   @@map("tournaments")
 }
 
@@ -130,8 +135,13 @@ model Team {
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
   videosWon           Video[]                @relation("VideoWinner")
+  gamesWon            MatchGame[]            @relation("GameWinner")
+
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
 
   @@index([name])
+  @@index([search_document], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "teams_name_trgm_idx")
   @@map("teams")
 }
 
@@ -154,36 +164,42 @@ model Player {
   MatchItemEvent      MatchItemEvent[]
   MatchEvent          MatchEvent[]
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
   @@index([team_id])
   @@index([nickname])
+  @@index([search_document], type: Gin)
+  @@index([nickname(ops: raw("gin_trgm_ops"))], type: Gin, map: "players_nickname_trgm_idx")
   @@map("players")
 }
 
 model Match {
-  id             String       @id @default(uuid()) @db.Uuid
-  tournament_id  String?      @db.Uuid
-  stage          match_stage?
-  round          Int?
-  group_name     String?
-  best_of        Int          @default(1)
-  game_number    Int?
-  team_a_id      String       @db.Uuid
-  team_b_id      String       @db.Uuid
-  score_a        Int?
-  score_b        Int?
-  winner_team_id String?      @db.Uuid
-  status         match_status @default(scheduled)
-  scheduled_at   DateTime
-  started_at     DateTime?
-  ended_at       DateTime?
-  stream_url     String?
-  thumbnail_url  String?
-  viewer_count   Int          @default(0)
-  featured       Boolean      @default(false)
-  stream_delay_seconds Int     @default(30)
-  created_at     DateTime     @default(now())
-  updated_at     DateTime     @updatedAt
+  id                   String       @id @default(uuid()) @db.Uuid
+  tournament_id        String?      @db.Uuid
+  stage                match_stage?
+  round                Int?
+  group_name           String?
+  best_of              Int          @default(1)
+  game_number          Int?
+  team_a_id            String       @db.Uuid
+  team_b_id            String       @db.Uuid
+  score_a              Int?
+  score_b              Int?
+  winner_team_id       String?      @db.Uuid
+  status               match_status @default(scheduled)
+  scheduled_at         DateTime
+  started_at           DateTime?
+  ended_at             DateTime?
+  stream_url           String?
+  thumbnail_url        String?
+  viewer_count         Int          @default(0)
+  featured             Boolean      @default(false)
+  stream_delay_seconds Int          @default(30)
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
 
+  games               MatchGame[]
+  recordings          MatchGameRecording[]
   tournament          Tournament?            @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
   teamA               Team                   @relation("MatchTeamA", fields: [team_a_id], references: [id], onDelete: Restrict)
   teamB               Team                   @relation("MatchTeamB", fields: [team_b_id], references: [id], onDelete: Restrict)
@@ -203,16 +219,60 @@ model Match {
   tickets             Ticket[]
 
   @@index([status, scheduled_at])
-  @@index([tournament_id])
+  @@index([tournament_id, status])
   @@index([team_a_id])
   @@index([team_b_id])
+  @@index([winner_team_id])
   @@map("matches")
+}
+
+enum game_status {
+  live
+  completed
+}
+
+/// One game of a series (best_of). The series score derives from completed games.
+model MatchGame {
+  id               String      @id @default(uuid()) @db.Uuid
+  match_id         String      @db.Uuid
+  game_number      Int
+  status           game_status @default(live)
+  winner_team_id   String?     @db.Uuid
+  started_at       DateTime?
+  ended_at         DateTime?
+  duration_seconds Int?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  match  Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  winner Team? @relation("GameWinner", fields: [winner_team_id], references: [id], onDelete: Restrict)
+
+  @@unique([match_id, game_number])
+  @@index([winner_team_id])
+  @@map("match_games")
+}
+
+/// Recorded game data that the demo replay engine plays back live (internal).
+model MatchGameRecording {
+  match_id         String   @db.Uuid
+  game_number      Int
+  duration_seconds Int
+  winner_team_id   String   @db.Uuid
+  /// Per player: hero, final stats, build, purchases with seconds; team totals.
+  script           Json
+  created_at       DateTime @default(now())
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@id([match_id, game_number])
+  @@map("match_game_recordings")
 }
 
 model MatchTeamStatistic {
   id                    String @id @default(uuid()) @db.Uuid
   match_id              String @db.Uuid
   team_id               String @db.Uuid
+  game_number           Int    @default(1)
   kills                 Int    @default(0)
   deaths                Int    @default(0)
   assists               Int    @default(0)
@@ -224,32 +284,41 @@ model MatchTeamStatistic {
   match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
   team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
-  @@unique([match_id, team_id])
+  @@unique([match_id, team_id, game_number])
   @@index([team_id])
   @@map("match_team_statistics")
 }
 
 model PlayerMatchStatistic {
-  id           String  @id @default(uuid()) @db.Uuid
-  match_id     String  @db.Uuid
-  player_id    String  @db.Uuid
-  team_id      String  @db.Uuid
-  kills        Int     @default(0)
-  deaths       Int     @default(0)
-  assists      Int     @default(0)
-  gold         Int     @default(0)
-  damage       Int     @default(0)
-  damage_taken Int     @default(0)
-  level        Int?
-  hero_picked  String?
-  mvp          Boolean @default(false)
-  details      Json    @default("{}")
+  id            String  @id @default(uuid()) @db.Uuid
+  match_id      String  @db.Uuid
+  player_id     String  @db.Uuid
+  team_id       String  @db.Uuid
+  game_number   Int     @default(1)
+  kills         Int     @default(0)
+  deaths        Int     @default(0)
+  assists       Int     @default(0)
+  gold          Int     @default(0)
+  damage        Int     @default(0)
+  damage_taken  Int     @default(0)
+  level         Int?
+  hero_picked   String?
+  hero_icon_url String?
+  tower_damage  Int     @default(0)
+  /// { id, name, icon_url } of the main emblem set.
+  emblem        Json?
+  /// [{ id, name, icon_url }] talents picked.
+  talents       Json?
+  /// [{ id, name, icon_url }] final build, slot order.
+  items         Json?
+  mvp           Boolean @default(false)
+  details       Json    @default("{}")
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
   player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
-  @@unique([match_id, player_id])
+  @@unique([match_id, player_id, game_number])
   @@index([player_id])
   @@index([team_id, match_id])
   @@map("player_match_statistics")
@@ -272,7 +341,16 @@ model Video {
   match       Match? @relation(fields: [match_id], references: [id], onDelete: SetNull)
   winningTeam Team?  @relation("VideoWinner", fields: [winning_team_id], references: [id], onDelete: Restrict)
 
+  search_document Unsupported("tsvector")? @default(dbgenerated()) /// generated: see migration 20261008120000_search
+
+  media MediaAsset?
+
   @@index([type, published_at(sort: Desc)])
+  @@index([match_id])
+  @@index([winning_team_id])
+  @@index([published_at(sort: Desc)])
+  @@index([search_document], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "videos_title_trgm_idx")
   @@map("videos")
 }
 
@@ -307,6 +385,7 @@ model WatchHistory {
 model MatchGoldSnapshot {
   id          String   @id @default(uuid()) @db.Uuid
   match_id    String   @db.Uuid
+  game_number Int      @default(1)
   team_id     String   @db.Uuid
   gold        Int      @default(0)
   recorded_at DateTime @default(now())
@@ -315,42 +394,53 @@ model MatchGoldSnapshot {
   team  Team  @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, team_id, recorded_at])
-  @@index([match_id, recorded_at])
+  @@index([match_id, game_number, recorded_at])
+  @@index([team_id])
   @@map("match_gold_snapshots")
 }
 
 model PlayerMatchSnapshot {
-  id           String   @id @default(uuid()) @db.Uuid
-  match_id     String   @db.Uuid
-  player_id    String   @db.Uuid
-  team_id      String   @db.Uuid
-  kills        Int      @default(0)
-  deaths       Int      @default(0)
-  assists      Int      @default(0)
-  gold         Int      @default(0)
-  damage       Int      @default(0)
-  damage_taken Int      @default(0)
-  level        Int?
-  recorded_at  DateTime @default(now())
+  id            String   @id @default(uuid()) @db.Uuid
+  match_id      String   @db.Uuid
+  game_number   Int      @default(1)
+  player_id     String   @db.Uuid
+  team_id       String   @db.Uuid
+  kills         Int      @default(0)
+  deaths        Int      @default(0)
+  assists       Int      @default(0)
+  gold          Int      @default(0)
+  damage        Int      @default(0)
+  damage_taken  Int      @default(0)
+  level         Int?
+  /// Hero picked for this game (null until the draft is known).
+  hero          String?
+  hero_icon_url String?
+  recorded_at   DateTime @default(now())
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
   player Player @relation(fields: [player_id], references: [id], onDelete: Restrict)
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, player_id, recorded_at])
-  @@index([match_id, recorded_at])
+  @@index([match_id, game_number, recorded_at])
+  @@index([player_id])
+  @@index([team_id])
   @@map("player_match_snapshots")
 }
 
 model MatchItemEvent {
   id           String           @id @default(uuid()) @db.Uuid
   match_id     String           @db.Uuid
+  game_number  Int              @default(1)
   player_id    String           @db.Uuid
   team_id      String           @db.Uuid
   item_id      String
   item_name    String
   phase        match_item_phase
   slot         Int?
+  /// 1 component · 2 intermediate · 3 final.
+  tier         Int?
+  icon_url     String?
   purchased_at DateTime         @default(now())
 
   match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
@@ -358,13 +448,16 @@ model MatchItemEvent {
   team   Team   @relation(fields: [team_id], references: [id], onDelete: Restrict)
 
   @@unique([match_id, player_id, item_name, purchased_at])
-  @@index([match_id, purchased_at])
+  @@index([match_id, game_number, purchased_at])
+  @@index([player_id])
+  @@index([team_id])
   @@map("match_item_events")
 }
 
 model MatchEvent {
   id          String   @id @default(uuid()) @db.Uuid
   match_id    String   @db.Uuid
+  game_number Int      @default(1)
   team_id     String?  @db.Uuid
   player_id   String?  @db.Uuid
   event_type  String
@@ -376,7 +469,9 @@ model MatchEvent {
   team   Team?   @relation(fields: [team_id], references: [id], onDelete: Restrict)
   player Player? @relation(fields: [player_id], references: [id], onDelete: Restrict)
 
-  @@index([match_id, occurred_at])
+  @@index([match_id, game_number, occurred_at])
+  @@index([team_id])
+  @@index([player_id])
   @@map("match_events")
 }
 
@@ -388,11 +483,11 @@ enum broadcast_language {
 }
 
 model MatchBroadcast {
-  id           String              @id @default(uuid()) @db.Uuid
-  match_id     String              @db.Uuid
+  id           String             @id @default(uuid()) @db.Uuid
+  match_id     String             @db.Uuid
   language     broadcast_language
   stream_url   String
-  viewer_count Int                 @default(0)
+  viewer_count Int                @default(0)
 
   match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
 
@@ -412,6 +507,7 @@ model MatchComment {
   profile Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([match_id, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
   @@map("match_comments")
 }
 
@@ -421,6 +517,37 @@ enum ticket_order_status {
   cancelled
   expired
   failed
+  refund_required
+}
+
+enum media_protection {
+  none
+  clearkey_aes
+  multidrm
+}
+
+enum payment_provider {
+  nowpayments
+  xendit
+  sandbox
+}
+
+enum payment_method {
+  crypto
+  qris
+  va_bca
+  va_bni
+  va_bri
+  va_mandiri
+  va_permata
+}
+
+enum payment_status {
+  pending
+  succeeded
+  failed
+  expired
+  cancelled
 }
 
 enum ticket_status {
@@ -434,6 +561,8 @@ model MatchTicketConfig {
   venue_name     String
   venue_city     String?
   price_usd      Decimal   @db.Decimal(10, 2)
+  /// Price for IDR methods (QRIS, bank VA); null = only crypto (USD) is offered.
+  price_idr      Int?
   quota_total    Int
   sales_open_at  DateTime?
   sales_close_at DateTime?
@@ -461,9 +590,10 @@ model TicketOrder {
   created_at          DateTime            @default(now())
   paid_at             DateTime?
 
-  match   Match    @relation(fields: [match_id], references: [id], onDelete: Restrict)
-  profile Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tickets Ticket[]
+  match    Match     @relation(fields: [match_id], references: [id], onDelete: Restrict)
+  profile  Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tickets  Ticket[]
+  payments Payment[]
 
   @@index([match_id, status])
   @@index([user_id, created_at(sort: Desc)])
@@ -475,6 +605,8 @@ model Ticket {
   order_id  String        @db.Uuid
   match_id  String        @db.Uuid
   user_id   String        @db.Uuid
+  /// 1..quantity within the order: (order_id, seq) unique makes double issuance impossible.
+  seq       Int           @default(1)
   code      String        @unique
   status    ticket_status @default(valid)
   issued_at DateTime      @default(now())
@@ -483,7 +615,116 @@ model Ticket {
   match   Match       @relation(fields: [match_id], references: [id], onDelete: Restrict)
   profile Profile     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
+  @@unique([order_id, seq])
   @@index([user_id, issued_at(sort: Desc)])
   @@index([match_id])
   @@map("tickets")
+}
+
+/// One attempt to pay an order with a given method; an order may have several
+/// (e.g. QRIS expired, then paid by BCA virtual account).
+model Payment {
+  id                 String           @id @default(uuid()) @db.Uuid
+  order_id           String           @db.Uuid
+  provider           payment_provider
+  method             payment_method
+  /// ISO 4217: USD for crypto, IDR for QRIS/VA.
+  currency           String
+  amount             Decimal          @db.Decimal(14, 2)
+  status             payment_status   @default(pending)
+  /// The provider's own id (NOWPayments invoice id, Xendit payment_request_id).
+  provider_reference String?
+  /// What the customer must do: { kind: redirect|qr|va, url?, qr_string?, va_number?, bank? }.
+  action             Json?
+  failure_reason     String?
+  expires_at         DateTime
+  paid_at            DateTime?
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+
+  order  TicketOrder    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  events PaymentEvent[]
+
+  @@index([order_id, created_at(sort: Desc)])
+  @@index([status, created_at])
+  @@map("payments")
+}
+
+/// Inbox of provider webhooks (and reconciliation results): deduplicated by
+/// (provider, event_key), processed asynchronously, kept for audit.
+model PaymentEvent {
+  id           String           @id @default(uuid()) @db.Uuid
+  provider     payment_provider
+  event_key    String
+  payment_id   String?          @db.Uuid
+  /// Normalized: succeeded | failed | expired | pending.
+  status       String
+  amount       Decimal?         @db.Decimal(14, 2)
+  currency     String?
+  payload      Json
+  received_at  DateTime         @default(now())
+  processed_at DateTime?
+  /// What processing did (e.g. "paid", "late_paid", "refund_required", "amount_mismatch").
+  outcome      String?
+
+  payment Payment? @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+
+  @@unique([provider, event_key])
+  @@index([processed_at])
+  @@map("payment_events")
+}
+
+/// A packaged (optionally encrypted) stream: DASH for MSE/EME browsers, HLS
+/// for Safari/iOS. Segments live on the CDN; access is gated by the keys.
+model MediaAsset {
+  id                  String           @id @default(uuid()) @db.Uuid
+  video_id            String?          @unique @db.Uuid
+  title               String
+  protection          media_protection @default(clearkey_aes)
+  /// Absolute CDN URLs of the manifests.
+  dash_url            String?
+  hls_url             String?
+  /// Content key id (32 hex chars) when encrypted.
+  kid                 String?
+  /// Content id registered with a commercial DRM provider, if any.
+  provider_content_id String?
+  duration_seconds    Int?
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+
+  video Video?      @relation(fields: [video_id], references: [id], onDelete: SetNull)
+  key   ContentKey? @relation(fields: [kid], references: [kid])
+
+  @@map("media_assets")
+}
+
+/// Content encryption keys, stored encrypted (AES-256-GCM envelope with
+/// DRM_MASTER_KEY); plaintext keys never touch the database.
+model ContentKey {
+  kid        String   @id
+  ciphertext String
+  iv         String
+  auth_tag   String
+  created_at DateTime @default(now())
+
+  assets MediaAsset[]
+
+  @@map("content_keys")
+}
+
+/// Web Push subscriptions (one row per browser/device), for match reminders.
+model PushSubscription {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  /// Push service URL; unique per browser installation.
+  endpoint     String    @unique
+  p256dh       String
+  auth         String
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("push_subscriptions")
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BusinessRuleException } from '../../common/errors/business-rule.exception';
 import {
   PLAYER_INCLUDE,
@@ -8,10 +8,15 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlayerDto } from './dto/create-player.dto';
 import { UpdatePlayerDto } from './dto/update-player.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
 
 @Injectable()
 export class AdminPlayersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: DomainEvents,
+  ) {}
 
   async create(dto: CreatePlayerDto): Promise<{ data: PlayerSummary }> {
     await this.ensureTeamExists(dto.team_id);
@@ -29,20 +34,19 @@ export class AdminPlayersService {
       },
     });
 
-    return this.getSummary(dto.slug, 'slug');
+    return this.publish(await this.getSummary(dto.slug, 'slug'));
   }
 
   async update(
     id: string,
     dto: UpdatePlayerDto,
   ): Promise<{ data: PlayerSummary }> {
-    const existing = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
     await this.ensureTeamExists(dto.team_id);
 
     await this.prisma.player.update({
@@ -59,17 +63,16 @@ export class AdminPlayersService {
       },
     });
 
-    return this.getSummary(id, 'id');
+    return this.publish(await this.getSummary(id, 'id'));
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const statsCount = await this.prisma.playerMatchStatistic.count({
       where: { player_id: id },
@@ -81,6 +84,7 @@ export class AdminPlayersService {
     }
 
     await this.prisma.player.delete({ where: { id } });
+    this.events.emit({ type: 'catalog.changed', entity: 'player', id });
   }
 
   private async ensureTeamExists(
@@ -89,26 +93,33 @@ export class AdminPlayersService {
     if (teamId === undefined || teamId === null) {
       return;
     }
-    const team = await this.prisma.team.findUnique({
-      where: { id: teamId },
-      select: { id: true },
+    orNotFound(
+      await this.prisma.team.findUnique({
+        where: { id: teamId },
+        select: { id: true },
+      }),
+    );
+  }
+
+  private publish(result: { data: PlayerSummary }): { data: PlayerSummary } {
+    this.events.emit({
+      type: 'catalog.changed',
+      entity: 'player',
+      id: result.data.id,
     });
-    if (team === null) {
-      throw new NotFoundException();
-    }
+    return result;
   }
 
   private async getSummary(
     value: string,
     key: 'id' | 'slug',
   ): Promise<{ data: PlayerSummary }> {
-    const row = await this.prisma.player.findUnique({
-      where: key === 'id' ? { id: value } : { slug: value },
-      include: PLAYER_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.player.findUnique({
+        where: key === 'id' ? { id: value } : { slug: value },
+        include: PLAYER_INCLUDE,
+      }),
+    );
     return { data: toPlayerSummary(row) };
   }
 }

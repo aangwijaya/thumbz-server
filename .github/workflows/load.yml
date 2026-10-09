@@ -1,0 +1,42 @@
+name: Load test
+
+# Manual: point it at a staging API (never production without a heads-up).
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: API origin, e.g. https://thumbz-api-staging.up.railway.app
+        required: true
+      vus:
+        description: Virtual users for the HTTP read test
+        default: '100'
+      sockets:
+        description: Socket.IO clients for the fan-out test
+        default: '1000'
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: HTTP read paths (k6)
+        run: |
+          docker run --rm -i -e BASE_URL="${{ inputs.api_url }}" -e VUS="${{ inputs.vus }}" -e DURATION=1m \
+            grafana/k6:1.3.0 run - < load/read-paths.js
+
+      - name: Realtime fan-out
+        env:
+          API_URL: ${{ inputs.api_url }}
+        run: |
+          ulimit -n 16384
+          node load/ws-fanout.mjs "${{ inputs.sockets }}" 30

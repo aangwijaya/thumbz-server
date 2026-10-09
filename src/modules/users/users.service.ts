@@ -13,11 +13,16 @@ export interface UserProfile {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Creates the profile on a user's first request. INSERT … ON CONFLICT DO
+   * NOTHING is atomic: a new user's parallel first requests cannot race into
+   * a unique violation (Prisma's upsert is find-then-create), and an existing
+   * profile (e.g. an admin role) is never touched.
+   */
   async ensureProfile(sub: string): Promise<void> {
-    await this.prisma.profile.upsert({
-      where: { id: sub },
-      update: {},
-      create: { id: sub, role: 'user' },
+    await this.prisma.profile.createMany({
+      data: [{ id: sub, role: 'user' }],
+      skipDuplicates: true,
     });
   }
 

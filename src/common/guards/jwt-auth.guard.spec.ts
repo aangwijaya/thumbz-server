@@ -1,7 +1,14 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { exportJWK, generateKeyPair, KeyLike, SignJWT } from 'jose';
+import {
+  createRemoteJWKSet,
+  exportJWK,
+  generateKeyPair,
+  KeyLike,
+  SignJWT,
+} from 'jose';
+import { JwtVerifierService } from '../auth/jwt-verifier.service';
 import { createServer, Server } from 'node:http';
 import { OptionalAuth } from '../decorators/optional-auth.decorator';
 import { Public } from '../decorators/public.decorator';
@@ -30,7 +37,7 @@ class OptionalAuthController {
 function contextFor(
   handler: () => unknown,
   controller: unknown,
-  req: Record<string, unknown>,
+  req: object,
 ): ExecutionContext {
   return {
     getHandler: () => handler,
@@ -84,7 +91,11 @@ describe('JwtAuthGuard', () => {
     const config = {
       get: (key: string) => (key === 'supabaseJwksUrl' ? jwksUrl : undefined),
     } as unknown as ConfigService;
-    return new JwtAuthGuard(new Reflector(), config);
+    const verifier = new JwtVerifierService(
+      createRemoteJWKSet(new URL(jwksUrl)),
+      config,
+    );
+    return new JwtAuthGuard(new Reflector(), verifier);
   }
 
   async function signToken(
@@ -107,7 +118,7 @@ describe('JwtAuthGuard', () => {
   }
 
   it('skips verification for @Public routes', async () => {
-    const request = { headers: {} };
+    const request: { headers: object; user?: unknown } = { headers: {} };
     const result = await buildGuard().canActivate(
       contextFor(
         PublicController.prototype.publicHandler,
@@ -258,7 +269,11 @@ describe('JwtAuthGuard optional auth', () => {
     const config = {
       get: (key: string) => (key === 'supabaseJwksUrl' ? jwksUrl : undefined),
     } as unknown as ConfigService;
-    return new JwtAuthGuard(new Reflector(), config);
+    const verifier = new JwtVerifierService(
+      createRemoteJWKSet(new URL(jwksUrl)),
+      config,
+    );
+    return new JwtAuthGuard(new Reflector(), verifier);
   }
 
   async function signToken(): Promise<string> {

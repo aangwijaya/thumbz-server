@@ -45,6 +45,20 @@ describe('validateEnv', () => {
     ).toThrow(/SUPABASE_JWKS_URL/);
   });
 
+  it('accepts an http JWKS URL only for a local Supabase stack', () => {
+    const local = 'http://127.0.0.1:54321/auth/v1/.well-known/jwks.json';
+    expect(() =>
+      validateEnv({ ...validEnv, SUPABASE_JWKS_URL: local }),
+    ).not.toThrow();
+    expect(() =>
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        SUPABASE_JWKS_URL: local,
+      }),
+    ).toThrow(/SUPABASE_JWKS_URL/);
+  });
+
   it('rejects an empty CORS_ORIGINS', () => {
     expect(() => validateEnv({ ...validEnv, CORS_ORIGINS: '' })).toThrow(
       /CORS_ORIGINS/,
@@ -82,14 +96,121 @@ describe('configuration', () => {
   it('exposes the remaining typed values', () => {
     const config = configuration(validEnv);
     expect(config).toEqual({
+      nodeEnv: 'development',
       port: 3001,
       databaseUrl: validEnv.DATABASE_URL,
       supabaseJwksUrl: validEnv.SUPABASE_JWKS_URL,
       corsOrigins: ['http://localhost:3000'],
+      frontendUrl: 'http://localhost:3000',
+      publicApiUrl: 'http://localhost:3001',
+      trustProxy: 0,
+      vapid: null,
+      logLevel: 'info',
+      metricsToken: null,
+      redisUrl: null,
+      cacheNamespace: 'thumbz',
+      liveSimulator: false,
+      liveSimulatorIntervalMs: 5_000,
+      revalidateSecret: null,
+      xenditSecretKey: null,
+      xenditCallbackToken: null,
+      xenditApiBase: 'https://api.xendit.co',
+      paymentsSandbox: false,
+      ticketSigningSecret: 'dev-only-ticket-signing-secret-change-me',
+      drmMasterKey: '0'.repeat(63) + '1',
+      playbackTokenSecret: 'dev-only-playback-token-secret-change-me',
+      maxStreamsPerUser: 2,
+      drmLicenseUrls: {
+        widevine: null,
+        playready: null,
+        fairplay: null,
+        fairplayCertificate: null,
+      },
       nowpaymentsApiKey: null,
       nowpaymentsIpnSecret: null,
       nowpaymentsApiBase: 'https://api-sandbox.nowpayments.io',
-      publicApiUrl: 'http://localhost:3001',
+    });
+  });
+
+  it('treats blank optional values as unset', () => {
+    const config = configuration({
+      ...validEnv,
+      NOWPAYMENTS_API_KEY: '  ',
+      FRONTEND_URL: '',
+      TRUST_PROXY: '',
+    });
+    expect(config.nowpaymentsApiKey).toBeNull();
+    expect(config.frontendUrl).toBe('http://localhost:3000');
+    expect(config.trustProxy).toBe(0);
+  });
+
+  it('strips trailing slashes from public URLs', () => {
+    const config = configuration({
+      ...validEnv,
+      FRONTEND_URL: 'https://thumbz.example/',
+      PUBLIC_API_URL: 'https://api.thumbz.example//',
+    });
+    expect(config.frontendUrl).toBe('https://thumbz.example');
+    expect(config.publicApiUrl).toBe('https://api.thumbz.example');
+  });
+});
+
+describe('validateEnv in production', () => {
+  const production = { ...validEnv, NODE_ENV: 'production' };
+
+  it('requires PUBLIC_API_URL, FRONTEND_URL, REDIS_URL and TICKET_SIGNING_SECRET', () => {
+    expect(() => validateEnv(production)).toThrow(
+      /PUBLIC_API_URL[\s\S]*FRONTEND_URL[\s\S]*REDIS_URL[\s\S]*TICKET_SIGNING_SECRET/,
+    );
+  });
+
+  it('accepts a complete production environment', () => {
+    expect(() =>
+      validateEnv({
+        ...production,
+        PUBLIC_API_URL: 'https://api.thumbz.example',
+        FRONTEND_URL: 'https://thumbz.example',
+        REDIS_URL: 'redis://default:pw@redis.internal:6379',
+        TICKET_SIGNING_SECRET: 'x'.repeat(32),
+        DRM_MASTER_KEY: 'a'.repeat(64),
+        PLAYBACK_TOKEN_SECRET: 'p'.repeat(32),
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-redis REDIS_URL', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, REDIS_URL: 'http://localhost:6379' }),
+    ).toThrow(/REDIS_URL/);
+  });
+
+  describe('Web Push (VAPID)', () => {
+    // Shapes of a real `web-push generate-vapid-keys` pair.
+    const keys = {
+      VAPID_PUBLIC_KEY: 'B'.repeat(87),
+      VAPID_PRIVATE_KEY: 'p'.repeat(43),
+      VAPID_SUBJECT: 'mailto:ops@thumbz.example',
+    };
+
+    it('is disabled without keys and enabled with all three', () => {
+      expect(configuration(validEnv).vapid).toBeNull();
+      expect(configuration({ ...validEnv, ...keys }).vapid).toEqual({
+        publicKey: keys.VAPID_PUBLIC_KEY,
+        privateKey: keys.VAPID_PRIVATE_KEY,
+        subject: keys.VAPID_SUBJECT,
+      });
+    });
+
+    it('rejects a partial key set', () => {
+      expect(() =>
+        validateEnv({ ...validEnv, VAPID_PUBLIC_KEY: keys.VAPID_PUBLIC_KEY }),
+      ).toThrow(/must be set together/);
+    });
+
+    it('rejects a subject that is not mailto: or https://', () => {
+      expect(() =>
+        validateEnv({ ...validEnv, ...keys, VAPID_SUBJECT: 'ops@thumbz' }),
+      ).toThrow(/VAPID_SUBJECT/);
     });
   });
 });

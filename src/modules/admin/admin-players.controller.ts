@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PlayerSummary } from '../players/players.service';
 import { AdminPlayersService } from './admin-players.service';
@@ -15,6 +16,8 @@ import { AdminIdParamsDto } from './dto/admin-id-params.dto';
 import { CreatePlayerDto } from './dto/create-player.dto';
 import { UpdatePlayerDto } from './dto/update-player.dto';
 
+@ApiTags('admin')
+@ApiBearerAuth()
 @Controller('admin/players')
 export class AdminPlayersController {
   constructor(private readonly adminPlayers: AdminPlayersService) {}

@@ -1,85 +1,315 @@
+import { z } from 'zod';
+
+export const DEFAULT_PORT = 3001;
+
+export type NodeEnv = 'development' | 'test' | 'production';
+
 export interface AppConfig {
+  nodeEnv: NodeEnv;
   port: number;
   databaseUrl: string;
   supabaseJwksUrl: string;
   corsOrigins: string[];
+  /** Browser-facing client URL (payment return pages, links in notifications). */
+  frontendUrl: string;
+  /** Public base URL of this API (payment provider callbacks). */
+  publicApiUrl: string;
+  /** Number of reverse-proxy hops to trust for client IPs (Railway = 1). */
+  trustProxy: number;
+  logLevel: string;
+  /** When set, GET /metrics requires `Authorization: Bearer <token>`. */
+  metricsToken: string | null;
+  redisUrl: string | null;
+  /** Prefix for cache keys in Redis (default "thumbz"). */
+  cacheNamespace: string;
+  /** Demo mode: seeded live matches keep "playing" (see LiveSimulatorService). */
+  liveSimulator: boolean;
+  liveSimulatorIntervalMs: number;
+  /** Shared secret for POST {frontendUrl}/api/revalidate; null disables it. */
+  revalidateSecret: string | null;
+  xenditSecretKey: string | null;
+  xenditCallbackToken: string | null;
+  xenditApiBase: string;
+  /** Demo/test: built-in sandbox provider + simulate endpoint (never in real production). */
+  paymentsSandbox: boolean;
+  /** HMAC key for ticket QR payloads (dev default outside production). */
+  ticketSigningSecret: string;
+  /** 32-byte AES-256-GCM key wrapping content keys (dev default outside production). */
+  drmMasterKey: string;
+  /** HS256 secret for short-lived playback tokens (dev default outside production). */
+  playbackTokenSecret: string;
+  maxStreamsPerUser: number;
+  /** Commercial DRM license endpoints (multidrm assets); null = not offered. */
+  drmLicenseUrls: {
+    widevine: string | null;
+    playready: string | null;
+    fairplay: string | null;
+    fairplayCertificate: string | null;
+  };
   nowpaymentsApiKey: string | null;
   nowpaymentsIpnSecret: string | null;
   nowpaymentsApiBase: string;
-  publicApiUrl: string;
+  /** Web Push (match reminders); null = push disabled. */
+  vapid: { publicKey: string; privateKey: string; subject: string } | null;
 }
 
-export const DEFAULT_PORT = 3001;
+/** Env vars are often present but empty (`FOO=`); treat that as unset. */
+function blankToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
 
-function parsePort(raw: unknown): number {
-  if (raw === undefined || raw === null || raw === '') {
-    return DEFAULT_PORT;
+function optional<T extends z.ZodType>(schema: T) {
+  return z.preprocess(blankToUndefined, schema.optional());
+}
+
+const httpUrl = z
+  .string()
+  .trim()
+  .regex(/^https?:\/\/[^\s]+$/, 'must be an http(s):// URL')
+  .transform((url) => url.replace(/\/+$/, ''));
+
+const envSchema = z
+  .object({
+    NODE_ENV: optional(z.enum(['development', 'test', 'production'])),
+    PORT: z.preprocess(
+      blankToUndefined,
+      z.coerce
+        .number('PORT must be an integer between 1 and 65535')
+        .int('PORT must be an integer between 1 and 65535')
+        .min(1, 'PORT must be an integer between 1 and 65535')
+        .max(65535, 'PORT must be an integer between 1 and 65535')
+        .optional(),
+    ),
+    DATABASE_URL: z
+      .string(
+        'DATABASE_URL is required and must start with postgresql:// or postgres://',
+      )
+      .regex(
+        /^postgres(ql)?:\/\//,
+        'DATABASE_URL is required and must start with postgresql:// or postgres://',
+      ),
+    SUPABASE_JWKS_URL: z
+      .string('SUPABASE_JWKS_URL is required and must be an https:// URL')
+      .regex(
+        /^https?:\/\//,
+        'SUPABASE_JWKS_URL is required and must be an https:// URL',
+      ),
+    CORS_ORIGINS: z
+      .string(
+        'CORS_ORIGINS is required and must be a comma-separated list of origins',
+      )
+      .trim()
+      .min(
+        1,
+        'CORS_ORIGINS is required and must be a comma-separated list of origins',
+      ),
+    FRONTEND_URL: optional(httpUrl),
+    PUBLIC_API_URL: optional(httpUrl),
+    TRUST_PROXY: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(0).max(10).optional(),
+    ),
+    LOG_LEVEL: optional(
+      z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+    ),
+    METRICS_TOKEN: optional(
+      z.string().min(16, 'METRICS_TOKEN must be at least 16 characters'),
+    ),
+    REDIS_URL: optional(
+      z.string().regex(/^rediss?:\/\//, 'REDIS_URL must be a redis:// URL'),
+    ),
+    CACHE_NAMESPACE: optional(
+      z
+        .string()
+        .regex(/^[a-z0-9:_-]{1,60}$/i, 'CACHE_NAMESPACE must be [a-z0-9:_-]'),
+    ),
+    LIVE_SIMULATOR: optional(z.enum(['true', 'false', '1', '0'])),
+    LIVE_SIMULATOR_INTERVAL_MS: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(1_000).max(60_000).optional(),
+    ),
+    REVALIDATE_SECRET: optional(
+      z.string().min(16, 'REVALIDATE_SECRET must be at least 16 characters'),
+    ),
+    XENDIT_SECRET_KEY: optional(z.string().trim()),
+    XENDIT_CALLBACK_TOKEN: optional(z.string().trim()),
+    XENDIT_API_BASE: optional(httpUrl),
+    PAYMENTS_SANDBOX: optional(z.enum(['true', 'false', '1', '0'])),
+    TICKET_SIGNING_SECRET: optional(
+      z
+        .string()
+        .min(32, 'TICKET_SIGNING_SECRET must be at least 32 characters'),
+    ),
+    DRM_MASTER_KEY: optional(
+      z
+        .string()
+        .regex(
+          /^[0-9a-f]{64}$/i,
+          'DRM_MASTER_KEY must be 64 hex chars (32 bytes)',
+        ),
+    ),
+    PLAYBACK_TOKEN_SECRET: optional(
+      z
+        .string()
+        .min(32, 'PLAYBACK_TOKEN_SECRET must be at least 32 characters'),
+    ),
+    MAX_STREAMS_PER_USER: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(1).max(10).optional(),
+    ),
+    DRM_WIDEVINE_LICENSE_URL: optional(httpUrl),
+    DRM_PLAYREADY_LICENSE_URL: optional(httpUrl),
+    DRM_FAIRPLAY_LICENSE_URL: optional(httpUrl),
+    DRM_FAIRPLAY_CERT_URL: optional(httpUrl),
+    NOWPAYMENTS_API_KEY: optional(z.string().trim()),
+    NOWPAYMENTS_IPN_SECRET: optional(z.string().trim()),
+    NOWPAYMENTS_API_BASE: optional(httpUrl),
+    VAPID_PUBLIC_KEY: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{80,100}$/, 'VAPID_PUBLIC_KEY must be base64url'),
+    ),
+    VAPID_PRIVATE_KEY: optional(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{40,50}$/, 'VAPID_PRIVATE_KEY must be base64url'),
+    ),
+    VAPID_SUBJECT: optional(
+      z
+        .string()
+        .regex(
+          /^(mailto:|https:\/\/)\S+$/,
+          'VAPID_SUBJECT must be a mailto: or https:// URL',
+        ),
+    ),
+  })
+  .superRefine((env, ctx) => {
+    // Plain http is only for a local Supabase stack (`supabase start`) in dev.
+    if (env.SUPABASE_JWKS_URL?.startsWith('http://')) {
+      const host = new URL(env.SUPABASE_JWKS_URL).hostname;
+      if (
+        env.NODE_ENV === 'production' ||
+        !['localhost', '127.0.0.1'].includes(host)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SUPABASE_JWKS_URL'],
+          message: 'SUPABASE_JWKS_URL is required and must be an https:// URL',
+        });
+      }
+    }
+    // Web Push is all-or-nothing: a half-configured key pair fails at boot.
+    const vapid = [
+      env.VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY,
+      env.VAPID_SUBJECT,
+    ].filter((value) => value !== undefined).length;
+    if (vapid !== 0 && vapid !== 3) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['VAPID_PUBLIC_KEY'],
+        message:
+          'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must be set together',
+      });
+    }
+    if (env.NODE_ENV !== 'production') {
+      return;
+    }
+    // Without these, payment callbacks and return URLs would silently point
+    // at localhost, and rate limits/caches would be per-instance.
+    for (const key of [
+      'PUBLIC_API_URL',
+      'FRONTEND_URL',
+      'REDIS_URL',
+      'TICKET_SIGNING_SECRET',
+      'DRM_MASTER_KEY',
+      'PLAYBACK_TOKEN_SECRET',
+    ] as const) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `${key} is required when NODE_ENV=production`,
+        });
+      }
+    }
+  });
+
+type ParsedEnv = z.infer<typeof envSchema>;
+
+function parseEnv(env: Record<string, unknown>): ParsedEnv {
+  const result = envSchema.safeParse(env);
+  if (!result.success) {
+    const lines = result.error.issues.map(
+      (issue) => `  - ${issue.path.join('.')}: ${issue.message}`,
+    );
+    throw new Error(`Invalid environment configuration:\n${lines.join('\n')}`);
   }
-  const port = Number(raw);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error('PORT must be an integer between 1 and 65535');
-  }
-  return port;
+  return result.data;
 }
 
 export function validateEnv(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
-  const errors: string[] = [];
-
-  const databaseUrl = config.DATABASE_URL;
-  if (
-    typeof databaseUrl !== 'string' ||
-    !/^postgres(ql)?:\/\//.test(databaseUrl)
-  ) {
-    errors.push(
-      'DATABASE_URL is required and must start with postgresql:// or postgres://',
-    );
-  }
-
-  const supabaseJwksUrl = config.SUPABASE_JWKS_URL;
-  if (
-    typeof supabaseJwksUrl !== 'string' ||
-    !/^https:\/\//.test(supabaseJwksUrl)
-  ) {
-    errors.push('SUPABASE_JWKS_URL is required and must be an https:// URL');
-  }
-
-  const corsOrigins = config.CORS_ORIGINS;
-  if (typeof corsOrigins !== 'string' || corsOrigins.trim() === '') {
-    errors.push(
-      'CORS_ORIGINS is required and must be a comma-separated list of origins',
-    );
-  }
-
-  try {
-    parsePort(config.PORT);
-  } catch (error) {
-    errors.push((error as Error).message);
-  }
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Invalid environment configuration:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
-    );
-  }
-
+  parseEnv(config);
   return config;
 }
 
 export function configuration(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const parsed = parseEnv(env);
+  const port = parsed.PORT ?? DEFAULT_PORT;
+  const corsOrigins = parsed.CORS_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
   return {
-    port: parsePort(env.PORT),
-    databaseUrl: env.DATABASE_URL as string,
-    supabaseJwksUrl: env.SUPABASE_JWKS_URL as string,
-    corsOrigins: (env.CORS_ORIGINS as string)
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0),
-    nowpaymentsApiKey: env.NOWPAYMENTS_API_KEY?.trim() || null,
-    nowpaymentsIpnSecret: env.NOWPAYMENTS_IPN_SECRET?.trim() || null,
+    nodeEnv: parsed.NODE_ENV ?? 'development',
+    port,
+    databaseUrl: parsed.DATABASE_URL,
+    supabaseJwksUrl: parsed.SUPABASE_JWKS_URL,
+    corsOrigins,
+    frontendUrl:
+      parsed.FRONTEND_URL ?? corsOrigins[0] ?? 'http://localhost:3000',
+    publicApiUrl: parsed.PUBLIC_API_URL ?? `http://localhost:${port}`,
+    trustProxy: parsed.TRUST_PROXY ?? 0,
+    logLevel: parsed.LOG_LEVEL ?? 'info',
+    metricsToken: parsed.METRICS_TOKEN ?? null,
+    redisUrl: parsed.REDIS_URL ?? null,
+    cacheNamespace: parsed.CACHE_NAMESPACE ?? 'thumbz',
+    liveSimulator: ['true', '1'].includes(parsed.LIVE_SIMULATOR ?? ''),
+    liveSimulatorIntervalMs: parsed.LIVE_SIMULATOR_INTERVAL_MS ?? 5_000,
+    revalidateSecret: parsed.REVALIDATE_SECRET ?? null,
+    xenditSecretKey: parsed.XENDIT_SECRET_KEY || null,
+    xenditCallbackToken: parsed.XENDIT_CALLBACK_TOKEN || null,
+    xenditApiBase: parsed.XENDIT_API_BASE ?? 'https://api.xendit.co',
+    paymentsSandbox: ['true', '1'].includes(parsed.PAYMENTS_SANDBOX ?? ''),
+    ticketSigningSecret:
+      parsed.TICKET_SIGNING_SECRET ??
+      'dev-only-ticket-signing-secret-change-me',
+    drmMasterKey: parsed.DRM_MASTER_KEY ?? '0'.repeat(63) + '1',
+    playbackTokenSecret:
+      parsed.PLAYBACK_TOKEN_SECRET ??
+      'dev-only-playback-token-secret-change-me',
+    maxStreamsPerUser: parsed.MAX_STREAMS_PER_USER ?? 2,
+    drmLicenseUrls: {
+      widevine: parsed.DRM_WIDEVINE_LICENSE_URL ?? null,
+      playready: parsed.DRM_PLAYREADY_LICENSE_URL ?? null,
+      fairplay: parsed.DRM_FAIRPLAY_LICENSE_URL ?? null,
+      fairplayCertificate: parsed.DRM_FAIRPLAY_CERT_URL ?? null,
+    },
+    nowpaymentsApiKey: parsed.NOWPAYMENTS_API_KEY || null,
+    nowpaymentsIpnSecret: parsed.NOWPAYMENTS_IPN_SECRET || null,
     nowpaymentsApiBase:
-      env.NOWPAYMENTS_API_BASE?.trim() || 'https://api-sandbox.nowpayments.io',
-    publicApiUrl: env.PUBLIC_API_URL?.trim() || 'http://localhost:3001',
+      parsed.NOWPAYMENTS_API_BASE ?? 'https://api-sandbox.nowpayments.io',
+    vapid:
+      parsed.VAPID_PUBLIC_KEY &&
+      parsed.VAPID_PRIVATE_KEY &&
+      parsed.VAPID_SUBJECT
+        ? {
+            publicKey: parsed.VAPID_PUBLIC_KEY,
+            privateKey: parsed.VAPID_PRIVATE_KEY,
+            subject: parsed.VAPID_SUBJECT,
+          }
+        : null,
   };
 }

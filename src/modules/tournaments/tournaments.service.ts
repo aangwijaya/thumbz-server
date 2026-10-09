@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -17,6 +17,7 @@ import { roundWinRate } from '../teams/teams.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListTournamentsDto } from './dto/list-tournaments.dto';
 import { TournamentScheduleDto } from './dto/tournament-schedule.dto';
+import { orNotFound } from '../../common/utils/not-found';
 
 const STAGE_ORDER = [
   'group_stage',
@@ -207,13 +208,12 @@ export class TournamentsService {
   }
 
   async get(id: string): Promise<{ data: TournamentDetail }> {
-    const row = await this.prisma.tournament.findUnique({
-      where: { id },
-      select: { ...SUMMARY_SELECT, description: true },
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id },
+        select: { ...SUMMARY_SELECT, description: true },
+      }),
+    );
     const stages = await computeCurrentStages(this.prisma, [id]);
     return {
       data: {
@@ -224,13 +224,12 @@ export class TournamentsService {
   }
 
   private async requireTournament(id: string): Promise<void> {
-    const tournament = await this.prisma.tournament.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (tournament === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
   }
 
   async schedule(

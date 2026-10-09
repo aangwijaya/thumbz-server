@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { player_role, Prisma } from '@prisma/client';
 import {
   PaginationMeta,
@@ -22,6 +22,8 @@ import { roundWinRate } from '../teams/teams.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListPlayersDto } from './dto/list-players.dto';
 import { PlayerMatchesDto } from './dto/player-matches.dto';
+import { orNotFound } from '../../common/utils/not-found';
+import { findPage, ListMeta } from '../../common/utils/find-page';
 
 export const PLAYER_INCLUDE = {
   team: { select: SUMMARY_SELECT },
@@ -106,7 +108,12 @@ function roundOneDecimal(value: number): number {
 type StatRow = Prisma.PlayerMatchStatisticGetPayload<{
   include: {
     match: {
-      select: { winner_team_id: true; status: true; tournament_id: true };
+      select: {
+        winner_team_id: true;
+        status: true;
+        tournament_id: true;
+        games: { select: { game_number: true; winner_team_id: true } };
+      };
     };
   };
 }>;
@@ -115,37 +122,48 @@ function isCompleted(row: StatRow): boolean {
   return row.match.status === 'completed';
 }
 
+/** Rows are per game (§19): the game's winner, else the series winner. */
+function wonGame(row: StatRow): boolean {
+  const game = row.match.games.find((g) => g.game_number === row.game_number);
+  return (game?.winner_team_id ?? row.match.winner_team_id) === row.team_id;
+}
+
+/** One entry per series: rows are per game, a series counts once. */
+function perSeries(rows: StatRow[]): StatRow[] {
+  const seen = new Map<string, StatRow>();
+  for (const row of rows) {
+    if (!seen.has(row.match_id)) seen.set(row.match_id, row);
+  }
+  return [...seen.values()];
+}
+
 @Injectable()
 export class PlayersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(
     query: ListPlayersDto,
-  ): Promise<{ data: PlayerSummary[]; meta: PaginationMeta }> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
-    const sort = query.sort ?? 'nickname';
+  ): Promise<{ data: PlayerSummary[]; meta: ListMeta }> {
     const order = query.order ?? 'asc';
 
     const where: Prisma.PlayerWhereInput = {};
     if (query.team_id) where.team_id = query.team_id;
     if (query.role) where.role = query.role;
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.player.findMany({
-        where,
-        orderBy: { [sort]: order },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: PLAYER_INCLUDE,
-      }),
-      this.prisma.player.count({ where }),
-    ]);
+    const { rows, meta } = await findPage({
+      query,
+      sort: { field: 'nickname', order, type: 'string' },
+      where,
+      findMany: (args) =>
+        this.prisma.player.findMany({
+          ...(args as Prisma.PlayerFindManyArgs),
+          include: PLAYER_INCLUDE,
+        }),
+      count: (filter) => this.prisma.player.count({ where: filter }),
+      sortValue: (row) => row.nickname,
+    });
 
-    return {
-      data: rows.map(toPlayerSummary),
-      meta: buildPaginationMeta(page, pageSize, total),
-    };
+    return { data: rows.map(toPlayerSummary), meta };
   }
 
   private async statRows(playerId: string): Promise<StatRow[]> {
@@ -157,6 +175,7 @@ export class PlayersService {
             winner_team_id: true,
             status: true,
             tournament_id: true,
+            games: { select: { game_number: true, winner_team_id: true } },
           },
         },
       },
@@ -164,51 +183,41 @@ export class PlayersService {
   }
 
   private computeStats(rows: StatRow[]): PlayerStats {
+    // Averages are per game; matches played and win rate are per series.
     const completed = rows.filter(isCompleted);
-    const played = completed.length;
-    const won = completed.filter(
+    const series = perSeries(completed);
+    const played = series.length;
+    const won = series.filter(
       (row) => row.match.winner_team_id === row.team_id,
     ).length;
-    const avgKills =
-      played === 0
+    const average = (pick: (row: StatRow) => number): number | null =>
+      completed.length === 0
         ? null
         : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.kills, 0) / played,
-          );
-    const avgDeaths =
-      played === 0
-        ? null
-        : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.deaths, 0) / played,
-          );
-    const avgAssists =
-      played === 0
-        ? null
-        : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.assists, 0) / played,
+            completed.reduce((sum, row) => sum + pick(row), 0) /
+              completed.length,
           );
 
     return {
       matches_played: played,
-      avg_kills: avgKills,
-      avg_deaths: avgDeaths,
-      avg_assists: avgAssists,
+      avg_kills: average((row) => row.kills),
+      avg_deaths: average((row) => row.deaths),
+      avg_assists: average((row) => row.assists),
       mvp_count: completed.filter((row) => row.mvp).length,
       win_rate: roundWinRate(won, played),
     };
   }
 
   async get(id: string): Promise<{ data: PlayerDetail }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      include: PLAYER_INCLUDE,
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    const player = orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        include: PLAYER_INCLUDE,
+      }),
+    );
 
     const rows = await this.statRows(id);
-    const completed = rows.filter(isCompleted);
+    const completed = perSeries(rows.filter(isCompleted));
 
     // tournament history groups completed matches per tournament
     const tournamentIds = [
@@ -277,13 +286,12 @@ export class PlayersService {
     id: string,
     query: PlayerMatchesDto,
   ): Promise<{ data: MatchSummary[]; meta: PaginationMeta }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -311,24 +319,23 @@ export class PlayersService {
   }
 
   async statistics(id: string): Promise<{ data: PlayerStatistics }> {
-    const player = await this.prisma.player.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (player === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.player.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const rows = await this.statRows(id);
     const completed = rows.filter(isCompleted);
     const stats = this.computeStats(rows);
-    const played = stats.matches_played;
 
     const avgGold =
-      played === 0
+      completed.length === 0
         ? null
         : roundOneDecimal(
-            completed.reduce((sum, row) => sum + row.gold, 0) / played,
+            completed.reduce((sum, row) => sum + row.gold, 0) /
+              completed.length,
           );
 
     const heroMap = new Map<
@@ -345,7 +352,7 @@ export class PlayersService {
         kills: 0,
       };
       entry.games += 1;
-      if (row.match.winner_team_id === row.team_id) {
+      if (wonGame(row)) {
         entry.wins += 1;
       }
       entry.kills += row.kills;

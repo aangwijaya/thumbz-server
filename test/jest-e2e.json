@@ -4,12 +4,30 @@
     "json",
     "ts"
   ],
-  "rootDir": ".",
-  "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "rootDir": "..",
+  "testRegex": "test/.*\\.e2e-spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "testTimeout": 30000,
-  "maxWorkers": 6
+  "maxWorkers": 6,
+  "setupFiles": [
+    "<rootDir>/test/setup-env.ts"
+  ],
+  "collectCoverageFrom": [
+    "src/**/*.ts",
+    "!src/**/*.spec.ts",
+    "!src/main.ts",
+    "!src/worker.ts",
+    "!src/scripts/**"
+  ],
+  "coverageDirectory": "coverage-e2e",
+  "coverageThreshold": {
+    "global": {
+      "lines": 75,
+      "statements": 75,
+      "functions": 70,
+      "branches": 55
+    }
+  }
 }

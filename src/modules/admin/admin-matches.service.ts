@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { LiveMatchDto } from './dto/live-match.dto';
+import { UpsertGameDto } from './dto/upsert-game.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
 import { PlayerSnapshotDto } from './dto/upsert-live-stats.dto';
 import { ItemPurchaseDto } from './dto/upsert-equipment.dto';
@@ -18,12 +19,23 @@ import { MatchEventDto } from './dto/upsert-events.dto';
 import { BroadcastDto } from './dto/upsert-broadcasts.dto';
 import { UpsertStatisticsDto } from './dto/upsert-statistics.dto';
 import { validateCompletedMatch, validateTransition } from './match-state';
+import { orNotFound } from '../../common/utils/not-found';
+import { DomainEvents } from '../../infra/events/domain-events';
+
+/** Optional JSON column: absent/null stores SQL NULL (re-submission replaces). */
+const jsonOrNull = (
+  value: object | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull =>
+  value == null
+    ? Prisma.DbNull
+    : (JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue);
 
 @Injectable()
 export class AdminMatchesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly matchesService: MatchesService,
+    private readonly events: DomainEvents,
   ) {}
 
   async create(dto: CreateMatchDto): Promise<{ data: MatchDetail }> {
@@ -76,27 +88,26 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(row.id);
+    return this.publishChanged(await this.getDetail(row.id));
   }
 
   async update(
     id: string,
     dto: UpdateMatchDto,
   ): Promise<{ data: MatchDetail }> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        status: true,
-        team_a_id: true,
-        team_b_id: true,
-        score_a: true,
-        score_b: true,
-        winner_team_id: true,
-      },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const existing = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          team_a_id: true,
+          team_b_id: true,
+          score_a: true,
+          score_b: true,
+          winner_team_id: true,
+        },
+      }),
+    );
 
     const teamA = dto.team_a_id ?? existing.team_a_id;
     const teamB = dto.team_b_id ?? existing.team_b_id;
@@ -179,20 +190,25 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(id);
+    return this.publishChanged(await this.getDetail(id));
   }
 
   async remove(id: string): Promise<void> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { tournament_id: true, team_a_id: true, team_b_id: true },
+      }),
+    );
 
     // statistics rows cascade via the FK (ON DELETE CASCADE)
     await this.prisma.match.delete({ where: { id } });
+    this.events.emit({
+      type: 'match.changed',
+      matchId: id,
+      tournamentId: match.tournament_id,
+      teamIds: [match.team_a_id, match.team_b_id],
+    });
   }
 
   private async ensureTeamsExist(
@@ -213,43 +229,203 @@ export class AdminMatchesService {
     if (tournamentId === undefined || tournamentId === null) {
       return;
     }
-    const tournament = await this.prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { id: true },
+    orNotFound(
+      await this.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { id: true },
+      }),
+    );
+  }
+
+  private publishChanged(detail: { data: MatchDetail }): { data: MatchDetail } {
+    this.events.emit({
+      type: 'match.changed',
+      matchId: detail.data.id,
+      tournamentId: detail.data.tournament?.id ?? null,
+      teamIds: [detail.data.team_a.id, detail.data.team_b.id],
     });
-    if (tournament === null) {
-      throw new NotFoundException();
+    return detail;
+  }
+
+  /**
+   * Upserts one game of a series (contract §19). A live game becomes the
+   * match's current game; completing one recomputes the series score from
+   * completed games, so score and games can never disagree.
+   */
+  async upsertGame(
+    id: string,
+    gameNumber: number,
+    dto: UpsertGameDto,
+  ): Promise<{ data: MatchDetail }> {
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          team_a_id: true,
+          team_b_id: true,
+          best_of: true,
+          games: {
+            select: {
+              game_number: true,
+              status: true,
+              started_at: true,
+              ended_at: true,
+            },
+          },
+        },
+      }),
+    );
+    if (gameNumber > match.best_of) {
+      throw new BusinessRuleException(
+        `game_number must be between 1 and best_of (${match.best_of})`,
+      );
+    }
+    const winner = dto.winner_team_id ?? null;
+    if (dto.status === 'completed' && winner === null) {
+      throw new BusinessRuleException('A completed game needs winner_team_id');
+    }
+    if (
+      winner !== null &&
+      ![match.team_a_id, match.team_b_id].includes(winner)
+    ) {
+      throw new BusinessRuleException(
+        'winner_team_id must be one of the match teams',
+      );
+    }
+    const otherLive = match.games.find(
+      (game) => game.status === 'live' && game.game_number !== gameNumber,
+    );
+    if (dto.status === 'live' && otherLive) {
+      throw new BusinessRuleException(
+        `Game ${otherLive.game_number} is still live; complete it first`,
+      );
+    }
+
+    const existing = match.games.find(
+      (game) => game.game_number === gameNumber,
+    );
+    const now = new Date();
+    const startedAt = dto.started_at
+      ? new Date(dto.started_at)
+      : (existing?.started_at ?? now);
+    const endedAt =
+      dto.status === 'completed'
+        ? dto.ended_at
+          ? new Date(dto.ended_at)
+          : (existing?.ended_at ?? now)
+        : null;
+    const fields = {
+      status: dto.status,
+      winner_team_id: dto.status === 'completed' ? winner : null,
+      started_at: startedAt,
+      ended_at: endedAt,
+      duration_seconds: endedAt
+        ? Math.max(
+            0,
+            Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+          )
+        : null,
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.matchGame.upsert({
+        where: {
+          match_id_game_number: { match_id: id, game_number: gameNumber },
+        },
+        create: { match_id: id, game_number: gameNumber, ...fields },
+        update: fields,
+      });
+      const completed = await tx.matchGame.findMany({
+        where: { match_id: id, status: 'completed' },
+        select: { winner_team_id: true },
+      });
+      await tx.match.update({
+        where: { id },
+        data: {
+          ...(dto.status === 'live' ? { game_number: gameNumber } : {}),
+          score_a: completed.filter((g) => g.winner_team_id === match.team_a_id)
+            .length,
+          score_b: completed.filter((g) => g.winner_team_id === match.team_b_id)
+            .length,
+        },
+      });
+    });
+
+    await this.publishChangedById(id);
+    return this.getDetail(id);
+  }
+
+  /**
+   * Clears a series back to before game 1: games, score, per-game live data
+   * and statistics. Internal (the demo replay loops a recorded series); not
+   * exposed over HTTP.
+   */
+  async restartSeries(id: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.matchGame.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchGoldSnapshot.deleteMany({ where: { match_id: id } }),
+      this.prisma.playerMatchSnapshot.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchItemEvent.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchEvent.deleteMany({ where: { match_id: id } }),
+      this.prisma.playerMatchStatistic.deleteMany({ where: { match_id: id } }),
+      this.prisma.matchTeamStatistic.deleteMany({ where: { match_id: id } }),
+      this.prisma.match.update({
+        where: { id },
+        data: { score_a: 0, score_b: 0, game_number: null },
+      }),
+    ]);
+    await this.publishChangedById(id);
+    for (const kind of [
+      'economy',
+      'live-stats',
+      'equipment',
+      'events',
+    ] as const) {
+      this.events.emit({ type: 'match.live-data', matchId: id, kind });
+    }
+  }
+
+  private async publishChangedById(id: string): Promise<void> {
+    const match = await this.prisma.match.findUnique({
+      where: { id },
+      select: { tournament_id: true, team_a_id: true, team_b_id: true },
+    });
+    if (match !== null) {
+      this.events.emit({
+        type: 'match.changed',
+        matchId: id,
+        tournamentId: match.tournament_id,
+        teamIds: [match.team_a_id, match.team_b_id],
+      });
     }
   }
 
   private async getDetail(id: string): Promise<{ data: MatchDetail }> {
-    const row = await this.prisma.match.findUnique({
-      where: { id },
-      include: DETAIL_INCLUDE,
-    });
-    if (row === null) {
-      throw new NotFoundException();
-    }
+    const row = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        include: DETAIL_INCLUDE,
+      }),
+    );
     return { data: toMatchDetail(row) };
   }
 
   async setLive(id: string, dto: LiveMatchDto): Promise<{ data: MatchDetail }> {
-    const existing = await this.prisma.match.findUnique({
-      where: { id },
-      select: {
-        status: true,
-        team_a_id: true,
-        team_b_id: true,
-        score_a: true,
-        score_b: true,
-        winner_team_id: true,
-        started_at: true,
-        ended_at: true,
-      },
-    });
-    if (existing === null) {
-      throw new NotFoundException();
-    }
+    const existing = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          team_a_id: true,
+          team_b_id: true,
+          score_a: true,
+          score_b: true,
+          winner_team_id: true,
+          started_at: true,
+          ended_at: true,
+        },
+      }),
+    );
 
     if (dto.status !== undefined) {
       const transitionError = validateTransition(existing.status, dto.status);
@@ -300,7 +476,7 @@ export class AdminMatchesService {
       },
     });
 
-    return this.getDetail(id);
+    return this.publishChanged(await this.getDetail(id));
   }
 
   async upsertStatistics(
@@ -313,13 +489,14 @@ export class AdminMatchesService {
       players: Array<Record<string, unknown>>;
     };
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true },
+      }),
+    );
+    // Same default as the read (§19): current game, else last, else 1.
+    const gameNumber = await this.matchesService.gameOf(id, dto.game_number);
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const teamRows = dto.teams ?? [];
@@ -357,10 +534,19 @@ export class AdminMatchesService {
         };
         await tx.matchTeamStatistic.upsert({
           where: {
-            match_id_team_id: { match_id: id, team_id: row.team_id },
+            match_id_team_id_game_number: {
+              match_id: id,
+              team_id: row.team_id,
+              game_number: gameNumber,
+            },
           },
           update: data,
-          create: { match_id: id, team_id: row.team_id, ...data },
+          create: {
+            match_id: id,
+            team_id: row.team_id,
+            game_number: gameNumber,
+            ...data,
+          },
         });
       }
       for (const row of playerRows) {
@@ -373,25 +559,37 @@ export class AdminMatchesService {
           damage_taken: row.damage_taken ?? 0,
           level: row.level ?? null,
           hero_picked: row.hero_picked ?? null,
+          hero_icon_url: row.hero_icon_url ?? null,
+          tower_damage: row.tower_damage ?? 0,
+          emblem: jsonOrNull(row.emblem),
+          talents: jsonOrNull(row.talents),
+          items: jsonOrNull(row.items),
           mvp: row.mvp ?? false,
           details: (row.details ?? {}) as Prisma.InputJsonValue,
         };
         await tx.playerMatchStatistic.upsert({
           where: {
-            match_id_player_id: { match_id: id, player_id: row.player_id },
+            match_id_player_id_game_number: {
+              match_id: id,
+              player_id: row.player_id,
+              game_number: gameNumber,
+            },
           },
           update: data,
           create: {
             match_id: id,
             player_id: row.player_id,
             team_id: row.team_id,
+            game_number: gameNumber,
             ...data,
           },
         });
       }
     });
 
-    return this.matchesService.statistics(id);
+    const statistics = await this.matchesService.statistics(id, gameNumber);
+    await this.publishChangedById(id);
+    return statistics;
   }
 
   async upsertLiveStats(
@@ -400,13 +598,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = snapshots.some(
@@ -436,6 +633,9 @@ export class AdminMatchesService {
       damage: snapshot.damage ?? 0,
       damage_taken: snapshot.damage_taken ?? 0,
       level: snapshot.level ?? null,
+      hero: snapshot.hero ?? null,
+      hero_icon_url: snapshot.hero_icon_url ?? null,
+      game_number: snapshot.game_number ?? match.game_number ?? 1,
       recorded_at:
         snapshot.recorded_at !== undefined
           ? new Date(snapshot.recorded_at)
@@ -466,10 +666,18 @@ export class AdminMatchesService {
         damage: true,
         damage_taken: true,
         level: true,
+        hero: true,
+        hero_icon_url: true,
+        game_number: true,
         recorded_at: true,
       },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'live-stats',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -479,13 +687,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = purchases.some(
@@ -512,6 +719,9 @@ export class AdminMatchesService {
       item_name: purchase.item_name,
       phase: purchase.phase,
       slot: purchase.slot ?? null,
+      tier: purchase.tier ?? null,
+      icon_url: purchase.icon_url ?? null,
+      game_number: purchase.game_number ?? match.game_number ?? 1,
       purchased_at:
         purchase.purchased_at !== undefined
           ? new Date(purchase.purchased_at)
@@ -540,10 +750,18 @@ export class AdminMatchesService {
         item_name: true,
         phase: true,
         slot: true,
+        tier: true,
+        icon_url: true,
+        game_number: true,
         purchased_at: true,
       },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'equipment',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -553,13 +771,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<Record<string, unknown>>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { team_a_id: true, team_b_id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    const match = orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { team_a_id: true, team_b_id: true, game_number: true },
+      }),
+    );
 
     const validTeamIds = [match.team_a_id, match.team_b_id];
     const invalidTeam = events.some(
@@ -597,6 +814,7 @@ export class AdminMatchesService {
         event_type: event.event_type,
         title: event.title,
         details: (event.details ?? {}) as Prisma.InputJsonValue,
+        game_number: event.game_number ?? match.game_number ?? 1,
         occurred_at:
           event.occurred_at !== undefined ? new Date(event.occurred_at) : now,
       })),
@@ -612,10 +830,12 @@ export class AdminMatchesService {
         event_type: true,
         title: true,
         details: true,
+        game_number: true,
         occurred_at: true,
       },
     });
 
+    this.events.emit({ type: 'match.live-data', matchId: id, kind: 'events' });
     return { data: rows.map((row) => ({ ...row })) };
   }
 
@@ -625,13 +845,12 @@ export class AdminMatchesService {
   ): Promise<{
     data: Array<{ language: string; stream_url: string; viewer_count: number }>;
   }> {
-    const match = await this.prisma.match.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (match === null) {
-      throw new NotFoundException();
-    }
+    orNotFound(
+      await this.prisma.match.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+    );
 
     const languages = broadcasts.map((b) => b.language);
     if (new Set(languages).size !== languages.length) {
@@ -662,6 +881,11 @@ export class AdminMatchesService {
       select: { language: true, stream_url: true, viewer_count: true },
     });
 
+    this.events.emit({
+      type: 'match.live-data',
+      matchId: id,
+      kind: 'broadcasts',
+    });
     return { data: rows.map((row) => ({ ...row })) };
   }
 }

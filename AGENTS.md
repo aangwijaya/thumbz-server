@@ -30,7 +30,7 @@ Priority order:
 1. Explicit requirements from the current task
 2. `design/DESIGN.md`
 3. `PLAN.md`
-4. `../docs/API-CONTRACT.md` when available
+4. `docs/API-CONTRACT.md` when available
 5. Existing repository implementation and conventions
 6. Relevant installed skills
 7. Agent assumptions
@@ -74,7 +74,7 @@ Use it to understand:
 
 Follow the plan unless an implementation problem makes it impossible or unsafe to do so.
 
-### `../docs/API-CONTRACT.md`
+### `docs/API-CONTRACT.md`
 
 Defines the contract between frontend and backend.
 

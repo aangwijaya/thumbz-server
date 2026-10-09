@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -21,6 +22,13 @@ export class GoldSnapshotDto {
   @IsOptional()
   @IsISO8601()
   recorded_at?: string;
+
+  /** Game of the series (contract §19); default: the match's current game. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  game_number?: number;
 }
 
 export class UpsertEconomyDto {
