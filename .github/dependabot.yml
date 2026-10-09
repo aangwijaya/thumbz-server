@@ -1,20 +1,33 @@
 version: 2
+# Hobby project: one combined pull request per month for minor and patch
+# updates (each ecosystem), and none for major versions, which need a
+# deliberate upgrade (e.g. Prisma, Next, NestJS, the Node base image).
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      nestjs:
-        patterns: ['@nestjs/*']
-      prisma:
-        patterns: ['prisma', '@prisma/*']
+      npm-minor-and-patch:
+        update-types: ['minor', 'patch']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
