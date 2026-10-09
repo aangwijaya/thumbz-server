@@ -258,8 +258,7 @@ function main(): void {
         const entry = playerHeroes.get(key) ?? { team: code, heroes: [] };
         entry.heroes.push(player.hero);
         playerHeroes.set(key, entry);
-        if (player.heroIconUrl)
-          heroIcons.set(player.hero, player.heroIconUrl);
+        if (player.heroIconUrl) heroIcons.set(player.hero, player.heroIconUrl);
       }
     }
     review.push([
