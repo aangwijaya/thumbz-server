@@ -37,3 +37,6 @@ skills-lock.json
 
 # Private deployment notes
 /docs/DEPLOYMENT.md
+
+# Raw pages cached by scripts/data (never committed)
+/data-cache

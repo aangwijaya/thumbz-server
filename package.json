@@ -26,7 +26,9 @@
     "start:worker:prod": "node dist/worker",
     "media:package": "bash scripts/media/package.sh",
     "media:register": "ts-node scripts/media/register.ts",
-    "load:ws": "node load/ws-fanout.mjs"
+    "load:ws": "node load/ws-fanout.mjs",
+    "data:fetch": "ts-node --transpile-only scripts/data/mpl-ph/fetch.ts",
+    "data:build": "ts-node --transpile-only scripts/data/mpl-ph/build.ts"
   },
   "dependencies": {
     "@nest-lab/throttler-storage-redis": "^1.2.0",
@@ -72,6 +74,7 @@
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
     "@types/web-push": "^3.6.4",
+    "cheerio": "^1.2.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -117,7 +120,11 @@
         "functions": 35,
         "branches": 30
       }
-    }
+    },
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../scripts"
+    ]
   },
   "allowScripts": {
     "prisma@6.19.3": true,
