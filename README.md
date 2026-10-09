@@ -141,7 +141,7 @@ Railway, from the `Dockerfile` (`railway.json` runs `prisma migrate deploy`
 before each release):
 
 - **api** — default start command, health check `/health`.
-- **worker** — same image, start command `node dist/worker.js`, no public port.
+- **worker** — same image; set its config file to `railway.worker.json` (start command `node dist/worker.js`, no healthcheck: it serves no HTTP), no public port. Migrations run with the api service.
 - A Redis plugin shared by both.
 
 Required production variables are validated at boot; see
