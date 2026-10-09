@@ -3,7 +3,7 @@
 # The same image runs the API (default CMD) and the worker
 # (`node dist/worker.js`, a second Railway service with that start command).
 
-FROM node:22-bookworm-slim AS base
+FROM node:25-bookworm-slim AS base
 WORKDIR /app
 # Prisma's query engine needs OpenSSL at runtime.
 RUN apt-get update \
