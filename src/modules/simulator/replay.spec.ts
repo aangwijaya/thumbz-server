@@ -158,6 +158,21 @@ describe('replay', () => {
     }
   });
 
+  it('pays fights and objectives when they happen, so leads swing', () => {
+    const kill = timeline.find(
+      (m): m is Extract<typeof m, { kind: 'kill' }> =>
+        m.kind === 'kill' && m.second > 1,
+    );
+    if (!kill) throw new Error('no kill in the timeline');
+    const goldOf = (t: number) =>
+      recordingAt(recording, timeline, t).players.find(
+        (p) => p.player_id === kill.killer_id,
+      )?.gold ?? 0;
+    const steady = goldOf(kill.second - 1) - goldOf(kill.second - 2);
+    const atKill = goldOf(kill.second) - goldOf(kill.second - 1);
+    expect(atKill).toBeGreaterThan(steady * 5);
+  });
+
   it('replays purchases at their real seconds', () => {
     expect(purchasesBetween(recording, -1, 0).map((p) => p.item_name)).toEqual([
       'Knife',

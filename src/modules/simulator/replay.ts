@@ -245,6 +245,65 @@ export interface GameState {
 const curve = (final: number, progress: number, power: number) =>
   Math.round(final * Math.pow(progress, power));
 
+/** Share of a player's gold that comes steadily (minions, jungle, passive). */
+const STEADY_GOLD = 0.55;
+/** Relative gold a player earns from a moment they take part in. */
+const BOUNTY = {
+  kill: 300,
+  assist: 120,
+  tower: 90,
+  turtle: 110,
+  lord: 160,
+} as const;
+
+/** What each player earns from fights and objectives, as moments in time. */
+function bountiesOf(
+  recording: Recording,
+  timeline: Moment[],
+): Map<string, Array<{ second: number; amount: number }>> {
+  const byPlayer = new Map<string, Array<{ second: number; amount: number }>>();
+  const add = (playerId: string, second: number, amount: number) => {
+    const list = byPlayer.get(playerId) ?? [];
+    list.push({ second, amount });
+    byPlayer.set(playerId, list);
+  };
+  for (const moment of timeline) {
+    if (moment.kind === 'kill') {
+      add(moment.killer_id, moment.second, BOUNTY.kill);
+      for (const id of moment.assist_ids) add(id, moment.second, BOUNTY.assist);
+    } else if (moment.kind !== 'death') {
+      for (const p of recording.script.players) {
+        if (p.team_id === moment.team_id)
+          add(p.player_id, moment.second, BOUNTY[moment.kind]);
+      }
+    }
+  }
+  return byPlayer;
+}
+
+/**
+ * Gold at a moment: a steady part growing with time, plus the player's share
+ * of fights and objectives so far, scaled so the game ends on the real total.
+ * Leads therefore swing with the fights instead of drifting in a line.
+ */
+function goldAt(
+  final: number,
+  progress: number,
+  second: number,
+  bounties: Array<{ second: number; amount: number }>,
+): number {
+  const total = bounties.reduce((sum, b) => sum + b.amount, 0);
+  if (total === 0) return curve(final, progress, 1.15);
+  const earned = bounties
+    .filter((b) => b.second <= second)
+    .reduce((sum, b) => sum + b.amount, 0);
+  return Math.round(
+    final *
+      (STEADY_GOLD * Math.pow(progress, 1.15) +
+        (1 - STEADY_GOLD) * (earned / total)),
+  );
+}
+
 /** The state of the game at second t (clamped to the game). */
 export function recordingAt(
   recording: Recording,
@@ -255,6 +314,7 @@ export function recordingAt(
   const second = Math.max(0, Math.min(t, duration));
   const progress = duration > 0 ? second / duration : 1;
   const past = timeline.filter((moment) => moment.second <= second);
+  const bounties = bountiesOf(recording, timeline);
   const count = (match: (moment: Moment) => boolean) =>
     past.filter(match).length;
 
@@ -279,7 +339,10 @@ export function recordingAt(
       assists: done
         ? p.assists
         : count((m) => m.kind === 'kill' && m.assist_ids.includes(id)),
-      gold: curve(p.gold, progress, 1.15),
+      gold:
+        second >= duration
+          ? p.gold
+          : goldAt(p.gold, progress, second, bounties.get(id) ?? []),
       damage: curve(p.damage, progress, 1.4),
       damage_taken: curve(p.damage_taken, progress, 1.2),
       level: Math.min(15, 1 + Math.floor(14 * Math.min(1, progress * 1.3))),
