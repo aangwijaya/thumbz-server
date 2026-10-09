@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminMatchesService } from '../admin/admin-matches.service';
 import { AdminService } from '../admin/admin.service';
+import { TicketsService } from '../tickets/tickets.service';
 import { MatchEventDto } from '../admin/dto/upsert-events.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -32,6 +33,11 @@ const VIEWER_DRIFT_EVERY = 6;
 /** A simulated game lasts 12–16 minutes, like a real one. */
 const GAME_MIN_MS = 12 * 60_000;
 const GAME_SPREAD_MS = 4 * 60_000;
+/** Upcoming matches kept on the calendar so the demo never runs dry. */
+const UPCOMING_BUFFER = 4;
+const UPCOMING_SPACING_MS = 2 * 60 * 60_000;
+/** Matches kept on air at once. */
+const LIVE_TARGET = 2;
 
 interface MatchSim {
   state: SimState;
@@ -66,6 +72,7 @@ export class LiveSimulatorService {
     private readonly prisma: PrismaService,
     private readonly matches: AdminMatchesService,
     private readonly economy: AdminService,
+    private readonly tickets: TicketsService,
   ) {}
 
   /** One tick for every live match. Overlapping ticks are skipped. */
@@ -73,10 +80,20 @@ export class LiveSimulatorService {
     if (this.running) return;
     this.running = true;
     try {
-      const live = await this.prisma.match.findMany({
+      let live = await this.prisma.match.findMany({
         where: { status: 'live' },
         select: { id: true },
       });
+      // Series end and the worker may have been off: keep LIVE_TARGET on air.
+      for (let missing = LIVE_TARGET - live.length; missing > 0; missing--) {
+        await this.promoteNextScheduled(null);
+      }
+      if (live.length < LIVE_TARGET) {
+        live = await this.prisma.match.findMany({
+          where: { status: 'live' },
+          select: { id: true },
+        });
+      }
       for (const { id } of live) {
         await this.stepMatch(id).catch((error) =>
           this.logger.warn(`simulating ${id} failed: ${String(error)}`),
@@ -216,15 +233,18 @@ export class LiveSimulatorService {
    * The next scheduled match goes live on the channel the finished match
    * used (its stream and commentary feeds), like a league broadcast would.
    */
-  private async promoteNextScheduled(finishedId: string): Promise<void> {
+  private async promoteNextScheduled(finishedId: string | null): Promise<void> {
+    await this.ensureUpcoming();
     const [next, finished] = await Promise.all([
       this.prisma.match.findFirst({
         where: { status: 'scheduled' },
         orderBy: { scheduled_at: 'asc' },
         select: { id: true },
       }),
-      this.prisma.match.findUnique({
-        where: { id: finishedId },
+      // The channel to reuse: the finished match, else the latest one on air.
+      this.prisma.match.findFirst({
+        where: finishedId ? { id: finishedId } : { stream_url: { not: null } },
+        orderBy: { updated_at: 'desc' },
         select: {
           stream_url: true,
           broadcasts: { select: { language: true, stream_url: true } },
@@ -242,6 +262,67 @@ export class LiveSimulatorService {
       status: 'live',
       stream_url: finished?.stream_url ?? undefined,
     });
+  }
+
+  /**
+   * Keeps a few matches on the calendar: when fewer than UPCOMING_BUFFER are
+   * scheduled, new pairings from the latest tournament are added two hours
+   * apart, selling tickets like the latest match did.
+   */
+  private async ensureUpcoming(): Promise<void> {
+    const scheduled = await this.prisma.match.findMany({
+      where: { status: 'scheduled' },
+      orderBy: { scheduled_at: 'desc' },
+      select: { scheduled_at: true },
+    });
+    const missing = UPCOMING_BUFFER - scheduled.length;
+    if (missing <= 0) return;
+
+    const latest = await this.prisma.match.findFirst({
+      where: { tournament_id: { not: null } },
+      orderBy: { scheduled_at: 'desc' },
+      select: { tournament_id: true },
+    });
+    if (!latest?.tournament_id) return;
+    const played = await this.prisma.match.findMany({
+      where: { tournament_id: latest.tournament_id },
+      select: { team_a_id: true, team_b_id: true },
+    });
+    const teams = [
+      ...new Set(played.flatMap((m) => [m.team_a_id, m.team_b_id])),
+    ];
+    if (teams.length < 2) return;
+    const config = await this.prisma.matchTicketConfig.findFirst({
+      where: { match: { tournament_id: latest.tournament_id } },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    let at = Math.max(Date.now(), scheduled[0]?.scheduled_at.getTime() ?? 0);
+    for (let i = 0; i < missing; i++) {
+      at += UPCOMING_SPACING_MS;
+      const a = teams[Math.floor(this.rand() * teams.length)];
+      const others = teams.filter((team) => team !== a);
+      const b = others[Math.floor(this.rand() * others.length)];
+      const created = await this.matches.create({
+        tournament_id: latest.tournament_id,
+        team_a_id: a,
+        team_b_id: b,
+        stage: 'regular_season',
+        best_of: 3,
+        scheduled_at: new Date(at).toISOString(),
+      });
+      if (config) {
+        await this.tickets.upsertConfig(created.data.id, {
+          venue_name: config.venue_name,
+          venue_city: config.venue_city ?? undefined,
+          price_usd: Number(config.price_usd),
+          price_idr: config.price_idr ?? undefined,
+          quota_total: config.quota_total,
+          is_active: true,
+        });
+      }
+    }
+    this.logger.log(`scheduled ${missing} upcoming matches`);
   }
 
   private gameLength(): number {
