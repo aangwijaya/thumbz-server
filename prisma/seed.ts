@@ -1142,6 +1142,27 @@ async function main(): Promise<void> {
     }
   }
 
+  // ---- protected replay ----
+  // Media assets (encrypted streams + sealed keys) are registered separately
+  // (scripts/media/register.ts) and survive re-seeding; the seed's videos do
+  // not, so re-link any orphaned asset to the newest replay.
+  const orphan = await prisma.mediaAsset.findFirst({
+    where: { video_id: null },
+    orderBy: { created_at: 'asc' },
+  });
+  if (orphan) {
+    const replay = await prisma.video.findFirst({
+      where: { type: 'replay', media: null },
+      orderBy: { published_at: 'desc' },
+    });
+    if (replay) {
+      await prisma.mediaAsset.update({
+        where: { id: orphan.id },
+        data: { video_id: replay.id },
+      });
+    }
+  }
+
   const counts = {
     tournaments: TOURNAMENTS.length,
     teams: TEAMS.length,
