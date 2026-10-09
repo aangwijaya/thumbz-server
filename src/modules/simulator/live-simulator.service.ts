@@ -4,6 +4,7 @@ import { AdminService } from '../admin/admin.service';
 import { MatchEventDto } from '../admin/dto/upsert-events.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  eventOf,
   finalStatistics,
   GameScript,
   Moment,
@@ -265,52 +266,24 @@ export class LiveSimulatorService {
     );
 
     const firstKill = timeline.find((moment) => moment.kind === 'kill');
+    const names = { teams: replay.teamNames, players: replay.nicknames };
     const events: MatchEventDto[] = timeline
       .filter(
         (moment) => moment.second > replay.eventsUpTo && moment.second <= t,
       )
-      .flatMap((moment): MatchEventDto[] => {
-        const base = {
-          game_number,
-          occurred_at: at(moment.second),
-          // Real counts, reconstructed times (see replay.ts).
-          details: { reconstructed: true },
-        };
-        if (moment.kind === 'death') return [];
-        if (moment.kind === 'kill') {
-          const killer = this.describe(replay, recording, moment.killer_id);
-          const victim = moment.victim_id
-            ? (replay.nicknames[moment.victim_id] ?? 'an enemy')
-            : null;
-          const first = moment === firstKill;
-          return [
-            {
-              ...base,
-              team_id: moment.team_id,
-              player_id: moment.killer_id,
-              event_type: first ? 'first_blood' : 'kill',
-              title: first
-                ? `First blood: ${killer}${victim ? ` on ${victim}` : ''}`
-                : victim
-                  ? `${killer} took down ${victim}`
-                  : `${killer} scored a kill`,
-            },
-          ];
-        }
-        const team = replay.teamNames[moment.team_id] ?? 'A team';
-        return [
-          {
-            ...base,
-            team_id: moment.team_id,
-            event_type: moment.kind,
-            title:
-              moment.kind === 'lord'
-                ? `${team} secured the Lord`
-                : moment.kind === 'turtle'
-                  ? `${team} secured the Turtle`
-                  : `${team} destroyed a tower`,
-          },
-        ];
+      .flatMap((moment) => {
+        const event = eventOf(moment, recording, names, firstKill);
+        return event
+          ? [
+              {
+                ...event,
+                game_number,
+                occurred_at: at(moment.second),
+                // Real counts, reconstructed times (see replay.ts).
+                details: { reconstructed: true },
+              },
+            ]
+          : [];
       });
     if (events.length > 0) await this.matches.upsertEvents(matchId, events);
     replay.eventsUpTo = Math.max(replay.eventsUpTo, t);
@@ -411,18 +384,6 @@ export class LiveSimulatorService {
       replay.timelines.set(recording.game_number, timeline);
     }
     return timeline;
-  }
-
-  private describe(
-    replay: Replay,
-    recording: Recording,
-    playerId: string,
-  ): string {
-    const nickname = replay.nicknames[playerId] ?? 'A player';
-    const hero = recording.script.players.find(
-      (p) => p.player_id === playerId,
-    )?.hero;
-    return hero ? `${nickname} (${hero})` : nickname;
   }
 
   private async load(matchId: string): Promise<Replay | null> {

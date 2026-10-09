@@ -12,5 +12,6 @@ decided, and what it costs. Newest last; a superseded record says so at the top.
 | [0005](0005-redis-cache-aside-with-tags.md) | Redis cache-aside with tag invalidation and CDN headers |
 | [0006](0006-separate-worker-process.md) | A separate worker process for jobs and the simulator |
 | [0007](0007-series-games-as-data.md) | Games of a series are data; the score is derived from them |
+| [0008](0008-demo-replays-real-recorded-games.md) | The live demo replays real recorded games |
 
 Frontend-only decisions live in the client repo (`docs/adr/`).

@@ -51,7 +51,8 @@ flowchart LR
 | Payments | One provider interface (Xendit QRIS/VA, NOWPayments, sandbox), inbox dedupe, row locks, pure state machine, amount checks, idempotency keys, signed ticket QR | `src/modules/payments/`, `src/common/idempotency/` | [ADR 0003](docs/adr/0003-payments-behind-one-provider-interface.md) |
 | DRM | ClearKey license server, HLS AES-128 key proxy, sealed keys, 2-device limit, commercial CDM passthrough, packaging pipeline | `src/modules/media/`, `scripts/media/` | [ADR 0004](docs/adr/0004-hybrid-drm.md) |
 | Jobs | Separate worker, idempotent schedulers: hold expiry, reconciliation, reminders, simulator | `src/worker.ts`, `src/modules/jobs/` | [ADR 0006](docs/adr/0006-separate-worker-process.md) |
-| Series model | Games as data, score derived, per-game live data, heroes | `src/modules/matches/`, `src/modules/admin/` | [ADR 0007](docs/adr/0007-series-games-as-data.md) |
+| Series model | Games as data, score derived, per-game statistics, builds and item sequence | `src/modules/matches/`, `src/modules/admin/` | [ADR 0007](docs/adr/0007-series-games-as-data.md) |
+| Real data | One week of MPL PH S18 imported politely (robots.txt, cache, pauses), parsed and tested; live matches replay the recorded games in real time and loop | `scripts/data/mpl-ph/`, `src/modules/simulator/` | [ADR 0008](docs/adr/0008-demo-replays-real-recorded-games.md) |
 | Web Push | VAPID, per-device subscriptions, deduped reminders, dead-endpoint cleanup | `src/modules/push/` | |
 | Operations | zod-validated env (fails fast), pino JSON logs + request ids, Prometheus `/metrics`, `/health/live` + `/health/ready`, graceful shutdown | `src/config/`, `src/infra/` | |
 | Safety | Test runs refuse non-local databases, RLS deny-by-default, write rate limits per user/IP, error envelope that never leaks internals | `src/prisma/test-database-guard.ts`, `src/common/` | |
@@ -65,9 +66,9 @@ cp .env.example .env              # local values; never put cloud credentials he
 npm ci
 docker compose up -d postgres redis   # Postgres on 44322, Redis on 6379
 npx prisma migrate deploy
-npx prisma db seed                    # demo data: tournaments, teams, ~100 matches, 3 live
+npx prisma db seed                    # MPL PH S18 week 8: replays, live, upcoming (local DB only)
 npm run start:dev                     # API on :3001  (Swagger: /docs)
-npm run start:worker:dev              # jobs; LIVE_SIMULATOR=true makes live matches play
+npm run start:worker:dev              # jobs; LIVE_SIMULATOR=true replays the live matches
 ```
 
 Using the full Supabase stack instead (`supabase start`) also gives you Auth and
@@ -113,8 +114,26 @@ build. `load.yml` runs the load tests against a staging URL on demand.
   `?pgbouncer=true&connection_limit=4`. The direct host is IPv6-only on new
   projects, and the transaction pooler (`:6543`) breaks Prisma migrations.
   Don't keep the `[...]` around the password from the dashboard.
-- `npx prisma db seed` recreates the demo data. It never deletes user data
-  beyond its own fixtures, and re-links a registered protected replay.
+- `npx prisma db seed` replaces all catalog data (tournaments, teams, players,
+  matches, videos) with the dataset in `prisma/data/`, keeps user accounts and
+  re-links a registered protected replay. It refuses a non-local database
+  unless `SEED_REMOTE=replace-catalog` is set.
+
+## Demo data
+
+Real match data of **MPL Philippines Season 18, week 8** (ph-mpl.com):
+rosters, heroes, K/D/A, gold, damage, builds, emblems, talents and the item
+purchase sequence of every game. Names of items, emblems and talents come from
+MLBB Academy reference data. Dates are shifted around "now": the first day's
+matches are yesterday's replays, the middle day's are live (the worker replays
+the recorded games, looping), the last day's are upcoming with tickets.
+
+```bash
+npm run data:fetch -- --week 8   # polite: robots.txt paths only, cached in data-cache/
+npm run data:build -- --week 8   # → prisma/data/*.json + catalog-review.csv
+```
+
+Match data © Moonton / MPL Philippines, used for a non-commercial portfolio.
 
 ## Deployment
 

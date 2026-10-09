@@ -361,3 +361,53 @@ export function mvpOf(recording: Recording): string | null {
   );
   return [...winners].sort((a, b) => score(b) - score(a))[0]?.player_id ?? null;
 }
+
+export interface MomentEvent {
+  team_id: string;
+  player_id: string | null;
+  event_type: 'first_blood' | 'kill' | 'tower' | 'turtle' | 'lord';
+  title: string;
+}
+
+/** The feed entry for a moment (deaths without a kill have none). */
+export function eventOf(
+  moment: Moment,
+  recording: Recording,
+  names: { teams: Record<string, string>; players: Record<string, string> },
+  firstKill: Moment | undefined,
+): MomentEvent | null {
+  if (moment.kind === 'death') return null;
+  if (moment.kind === 'kill') {
+    const nickname = names.players[moment.killer_id] ?? 'A player';
+    const hero = recording.script.players.find(
+      (p) => p.player_id === moment.killer_id,
+    )?.hero;
+    const killer = hero ? `${nickname} (${hero})` : nickname;
+    const victim = moment.victim_id
+      ? (names.players[moment.victim_id] ?? 'an enemy')
+      : null;
+    const first = moment === firstKill;
+    return {
+      team_id: moment.team_id,
+      player_id: moment.killer_id,
+      event_type: first ? 'first_blood' : 'kill',
+      title: first
+        ? `First blood: ${killer}${victim ? ` on ${victim}` : ''}`
+        : victim
+          ? `${killer} took down ${victim}`
+          : `${killer} scored a kill`,
+    };
+  }
+  const team = names.teams[moment.team_id] ?? 'A team';
+  return {
+    team_id: moment.team_id,
+    player_id: null,
+    event_type: moment.kind,
+    title:
+      moment.kind === 'lord'
+        ? `${team} secured the Lord`
+        : moment.kind === 'turtle'
+          ? `${team} secured the Turtle`
+          : `${team} destroyed a tower`,
+  };
+}

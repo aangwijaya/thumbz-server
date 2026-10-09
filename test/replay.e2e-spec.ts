@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -170,7 +171,7 @@ describe('Live replay (e2e)', () => {
           game_number,
           duration_seconds: DURATION,
           winner_team_id: teamIds[0],
-          script: script(),
+          script: JSON.parse(JSON.stringify(script())) as Prisma.InputJsonValue,
         },
       });
     }
