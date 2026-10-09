@@ -134,6 +134,31 @@ export function parseSchedule(html: string, week: number): ScheduledMatch[] {
 /** Regular season is best of 3: a series is over once a team has 2 wins. */
 export const WINS_TO_TAKE_SERIES = 2;
 
+/**
+ * The series score from its games' winners, or null while it is undecided
+ * (for a match the schedule has not scored yet, but whose data page exists).
+ */
+export function seriesScore(
+  winners: string[],
+  teams: [string, string],
+): [number, number] | null {
+  const score = teams.map(
+    (team) => winners.filter((winner) => winner === team).length,
+  ) as [number, number];
+  return Math.max(...score) >= WINS_TO_TAKE_SERIES &&
+    score[0] + score[1] === winners.length
+    ? score
+    : null;
+}
+
+/** ph-mpl.com's data page slug: "tlph-onic-20261009". */
+export function dataSlugOf(match: ScheduledMatch): string | null {
+  const day = Date.parse(`${match.date.replace(/^\w+, /, '')} UTC`);
+  if (Number.isNaN(day)) return null;
+  const ymd = new Date(day).toISOString().slice(0, 10).replace(/-/g, '');
+  return `${match.teams.map((team) => team.toLowerCase()).join('-')}-${ymd}`;
+}
+
 export const isFinished = (match: ScheduledMatch): boolean =>
   match.score !== null && Math.max(...match.score) >= WINS_TO_TAKE_SERIES;
 
@@ -377,12 +402,9 @@ export function parseItemization(html: string): ItemTimeline {
  * winner per game by objectives (towers, then lords, then gold) and require
  * the result to match the series score; otherwise fail loudly for review.
  */
-export function inferGameWinners(
-  games: ParsedGame[],
-  teams: [string, string],
-  score: [number, number],
-): string[] {
-  const winners = games.map((game) => {
+/** Each game's winner from its totals: towers, then lords, then gold. */
+export function winnersByStats(games: ParsedGame[]): string[] {
+  return games.map((game) => {
     const [x, y] = game.sides;
     const rank = (side: GameSide) => [
       side.totals.towers,
@@ -396,6 +418,14 @@ export function inferGameWinners(
     }
     return x.team;
   });
+}
+
+export function inferGameWinners(
+  games: ParsedGame[],
+  teams: [string, string],
+  score: [number, number],
+): string[] {
+  const winners = winnersByStats(games);
   const wins = teams.map(
     (team) => winners.filter((winner) => winner === team).length,
   );

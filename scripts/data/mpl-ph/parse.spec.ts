@@ -8,7 +8,9 @@ import {
   parseItemization,
   parseMatchPage,
   parseSchedule,
+  dataSlugOf,
   playableOrder,
+  seriesScore,
   type TeamTotals,
 } from './parse';
 import { assignRoles, fit } from './roles';
@@ -154,5 +156,26 @@ describe('MPL PH parsers', () => {
     expect(playableOrder(['OMG', 'OMG'])).toEqual([0, 1]);
     // FLCN would take the series in game 2, yet a game 3 was played.
     expect(playableOrder(['FLCN', 'FLCN', 'TNC'])).toEqual([2, 0, 1]);
+  });
+
+  it('scores a series from its games only once it is decided', () => {
+    expect(seriesScore(['TLPH', 'TLPH'], ['TLPH', 'ONIC'])).toEqual([2, 0]);
+    expect(seriesScore(['ONIC', 'TLPH', 'ONIC'], ['TLPH', 'ONIC'])).toEqual([
+      1, 2,
+    ]);
+    // Game 3 still to play.
+    expect(seriesScore(['ONIC', 'TLPH'], ['TLPH', 'ONIC'])).toBeNull();
+  });
+
+  it('builds the data page slug of a scheduled match', () => {
+    expect(
+      dataSlugOf({
+        date: 'Friday, 9 October 2026',
+        time: '7:30 PM',
+        teams: ['TLPH', 'ONIC'],
+        score: null,
+        dataSlug: null,
+      }),
+    ).toBe('tlph-onic-20261009');
   });
 });

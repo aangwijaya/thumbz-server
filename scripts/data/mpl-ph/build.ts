@@ -9,8 +9,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  dataSlugOf,
   inferGameWinners,
   playableOrder,
+  seriesScore,
+  winnersByStats,
   isFinished,
   latestFinishedWith,
   parseItemization,
@@ -111,11 +114,41 @@ function main(): void {
       string,
       string,
     ];
-    const finished =
-      isFinished(scheduled) &&
-      scheduled.dataSlug &&
-      existsSync(join(CACHE, `match-${scheduled.dataSlug}.html`));
-    if (!finished) {
+    // Scored by the schedule, or (when the schedule lags) a data page whose
+    // games already make a decided series.
+    const slug = isFinished(scheduled)
+      ? scheduled.dataSlug
+      : dataSlugOf(scheduled);
+    const page = slug ? join(CACHE, `match-${slug}.html`) : null;
+    const parsedPage: ParsedGame[] =
+      page && existsSync(page)
+        ? parseMatchPage(read(`match-${slug}.html`))
+        : [];
+    const complete = parsedPage.every((game) =>
+      existsSync(join(CACHE, `items-${slug}-g${game.gameNumber}.html`)),
+    );
+    for (const game of parsedPage) {
+      for (const side of game.sides) {
+        const team = teamByLogo.get(side.logo);
+        if (!team) throw new Error(`${slug}: unknown team logo ${side.logo}`);
+        side.team = team.code.toUpperCase();
+      }
+    }
+    const score: [number, number] | null = isFinished(scheduled)
+      ? scheduled.score
+      : complete
+        ? seriesScore(winnersByStats(parsedPage), codes)
+        : null;
+    if (!isFinished(scheduled) && score) {
+      review.push([
+        'check',
+        slug as string,
+        score.join('-'),
+        'series score',
+        'the schedule has no score yet; taken from the games on the data page',
+      ]);
+    }
+    if (!slug || parsedPage.length === 0 || !complete || !score) {
       return {
         date: scheduled.date,
         time: scheduled.time,
@@ -125,20 +158,8 @@ function main(): void {
         games: [],
       };
     }
-    const slug = scheduled.dataSlug as string;
-    const parsed: ParsedGame[] = parseMatchPage(read(`match-${slug}.html`));
-    for (const game of parsed) {
-      for (const side of game.sides) {
-        const team = teamByLogo.get(side.logo);
-        if (!team) throw new Error(`${slug}: unknown team logo ${side.logo}`);
-        side.team = team.code.toUpperCase();
-      }
-    }
-    const inferred = inferGameWinners(
-      parsed,
-      codes,
-      scheduled.score as [number, number],
-    );
+    const parsed = parsedPage;
+    const inferred = inferGameWinners(parsed, codes, score);
     // The page's game order, unless its winners make an impossible series.
     const order = playableOrder(inferred);
     if (order.some((pageIndex, index) => pageIndex !== index)) {
@@ -242,7 +263,7 @@ function main(): void {
       time: scheduled.time,
       teams: codes,
       status: 'finished' as const,
-      score: scheduled.score,
+      score,
       data_slug: slug,
       games,
     };

@@ -98,7 +98,9 @@
    "role": "exp",
    "heroes": [
     "Lukas",
-    "Esmeralda"
+    "Esmeralda",
+    "Arlott",
+    "Alice"
    ]
   },
   {
@@ -107,7 +109,9 @@
    "role": "jungle",
    "heroes": [
     "Nolan",
-    "Nolan"
+    "Nolan",
+    "Suyou",
+    "Hirara"
    ]
   },
   {
@@ -116,7 +120,9 @@
    "role": "mid",
    "heroes": [
     "Zhuxin",
-    "Kimmy"
+    "Kimmy",
+    "Zhuxin",
+    "Zhuxin"
    ]
   },
   {
@@ -125,7 +131,9 @@
    "role": "gold",
    "heroes": [
     "cici",
-    "Freya"
+    "Freya",
+    "cici",
+    "cici"
    ]
   },
   {
@@ -134,7 +142,9 @@
    "role": "roam",
    "heroes": [
     "Hilda",
-    "Gatotkaca"
+    "Gatotkaca",
+    "Atlas",
+    "Hylos"
    ]
   },
   {
@@ -144,26 +154,32 @@
    "heroes": [
     "Aulus",
     "Nolan",
+    "Yi Sun-shin",
+    "Aulus",
     "Yi Sun-shin"
    ]
   },
   {
    "nickname": "Savero",
    "team": "ONIC",
-   "role": "gold",
+   "role": "exp",
    "heroes": [
     "Lukas",
     "Miya",
+    "Aulus",
+    "Freya",
     "Aulus"
    ]
   },
   {
    "nickname": "Kirk",
    "team": "ONIC",
-   "role": "exp",
+   "role": "gold",
    "heroes": [
     "Minotaur",
     "Lukas",
+    "Minotaur",
+    "Minotaur",
     "Minotaur"
    ]
   },
@@ -174,6 +190,8 @@
    "heroes": [
     "Gatotkaca",
     "Gatotkaca",
+    "Kalea",
+    "Marcel",
     "Kalea"
    ]
   },
@@ -184,6 +202,8 @@
    "heroes": [
     "Rafaela",
     "Valentina",
+    "Valentina",
+    "Luo Yi",
     "Valentina"
    ]
   },
@@ -14979,9 +14999,2364 @@
     "TLPH",
     "ONIC"
    ],
-   "status": "upcoming",
-   "score": null,
-   "games": []
+   "status": "finished",
+   "score": [
+    2,
+    0
+   ],
+   "data_slug": "tlph-onic-20261009",
+   "games": [
+    {
+     "game_number": 1,
+     "duration_seconds": 812,
+     "winner": "TLPH",
+     "sides": [
+      {
+       "team": "TLPH",
+       "totals": {
+        "kills": 14,
+        "assists": 42,
+        "deaths": 1,
+        "gold": 50289,
+        "goldPerMinute": 3716,
+        "damage": 161508,
+        "redBuffs": 10,
+        "blueBuffs": 9,
+        "lords": 1,
+        "turtles": 3,
+        "towers": 9
+       },
+       "players": [
+        {
+         "nickname": "Sanford",
+         "hero": "Arlott",
+         "kills": 5,
+         "deaths": 1,
+         "assists": 7,
+         "gold": 9264,
+         "hero_damage": 39647,
+         "damage_taken": 52696,
+         "tower_damage": 8698,
+         "items": [
+          "2013",
+          "2302",
+          "3212",
+          "2208",
+          "3204"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "111",
+          "721",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 3
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 9
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 70
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 127
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 193
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 255
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 301
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 317
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 328
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 350
+          },
+          {
+           "item": "2206",
+           "tier": 2,
+           "second": 388
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 406
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 420
+          },
+          {
+           "item": "3212",
+           "tier": 3,
+           "second": 447
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 491
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 500
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 522
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 592
+          },
+          {
+           "item": "2208",
+           "tier": 3,
+           "second": 637
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 654
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 740
+          },
+          {
+           "item": "3204",
+           "tier": 3,
+           "second": 808
+          }
+         ]
+        },
+        {
+         "nickname": "Teddy",
+         "hero": "cici",
+         "kills": 2,
+         "deaths": 0,
+         "assists": 6,
+         "gold": 9915,
+         "hero_damage": 31285,
+         "damage_taken": 31565,
+         "tower_damage": 17946,
+         "items": [
+          "2013",
+          "2302",
+          "3208",
+          "3009",
+          "3001",
+          "1001"
+         ],
+         "emblem": "20007",
+         "talents": [
+          "811",
+          "721",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 15
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 71
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 129
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 164
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 223
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 251
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 263
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 304
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 316
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 332
+          },
+          {
+           "item": "2004",
+           "tier": 2,
+           "second": 398
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 423
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 429
+          },
+          {
+           "item": "3009",
+           "tier": 3,
+           "second": 466
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 494
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 518
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 539
+          },
+          {
+           "item": "3208",
+           "tier": 3,
+           "second": 605
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 621
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 661
+          },
+          {
+           "item": "3001",
+           "tier": 3,
+           "second": 785
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 805
+          }
+         ]
+        },
+        {
+         "nickname": "Sanji",
+         "hero": "Zhuxin",
+         "kills": 1,
+         "deaths": 0,
+         "assists": 12,
+         "gold": 9233,
+         "hero_damage": 40930,
+         "damage_taken": 29170,
+         "tower_damage": 7611,
+         "items": [
+          "2105",
+          "2306",
+          "3105",
+          "3104",
+          "3208",
+          "2101"
+         ],
+         "emblem": "20001",
+         "talents": [
+          "811",
+          "321",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1102",
+           "tier": 1,
+           "second": 15
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 51
+          },
+          {
+           "item": "2105",
+           "tier": 2,
+           "second": 81
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 115
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 152
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 174
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 233
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 261
+          },
+          {
+           "item": "3105",
+           "tier": 3,
+           "second": 328
+          },
+          {
+           "item": "1204",
+           "tier": 1,
+           "second": 334
+          },
+          {
+           "item": "2306",
+           "tier": 3,
+           "second": 385
+          },
+          {
+           "item": "1105",
+           "tier": 1,
+           "second": 429
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 430
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 449
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 474
+          },
+          {
+           "item": "3104",
+           "tier": 3,
+           "second": 535
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 574
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 605
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 637
+          },
+          {
+           "item": "3208",
+           "tier": 3,
+           "second": 723
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 758
+          },
+          {
+           "item": "2101",
+           "tier": 2,
+           "second": 792
+          }
+         ]
+        },
+        {
+         "nickname": "Jaypee",
+         "hero": "Atlas",
+         "kills": 0,
+         "deaths": 0,
+         "assists": 12,
+         "gold": 8261,
+         "hero_damage": 12560,
+         "damage_taken": 45388,
+         "tower_damage": 1140,
+         "items": [
+          "3561",
+          "3205",
+          "3206",
+          "2206",
+          "3207",
+          "1205"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "811",
+          "121",
+          "331"
+         ],
+         "purchases": [
+          {
+           "item": "1511",
+           "tier": 1,
+           "second": 3
+          },
+          {
+           "item": "1204",
+           "tier": 1,
+           "second": 35
+          },
+          {
+           "item": "3561",
+           "tier": 3,
+           "second": 81
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 155
+          },
+          {
+           "item": "2203",
+           "tier": 2,
+           "second": 248
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 290
+          },
+          {
+           "item": "3205",
+           "tier": 3,
+           "second": 365
+          },
+          {
+           "item": "2204",
+           "tier": 2,
+           "second": 457
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 458
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 463
+          },
+          {
+           "item": "3206",
+           "tier": 3,
+           "second": 529
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 556
+          },
+          {
+           "item": "2206",
+           "tier": 2,
+           "second": 607
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 633
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 654
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 687
+          },
+          {
+           "item": "3207",
+           "tier": 3,
+           "second": 792
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 811
+          }
+         ]
+        },
+        {
+         "nickname": "KarlTzy",
+         "hero": "Suyou",
+         "kills": 6,
+         "deaths": 0,
+         "assists": 5,
+         "gold": 13616,
+         "hero_damage": 37086,
+         "damage_taken": 24344,
+         "tower_damage": 18005,
+         "items": [
+          "3431",
+          "3207",
+          "2014",
+          "2013",
+          "3001",
+          "2208"
+         ],
+         "emblem": "20005",
+         "talents": [
+          "111",
+          "122",
+          "531"
+         ],
+         "purchases": [
+          {
+           "item": "1411",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 51
+          },
+          {
+           "item": "2004",
+           "tier": 2,
+           "second": 109
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 161
+          },
+          {
+           "item": "2014",
+           "tier": 3,
+           "second": 257
+          },
+          {
+           "item": "3431",
+           "tier": 3,
+           "second": 304
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 328
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 336
+          },
+          {
+           "item": "3009",
+           "tier": 3,
+           "second": 363
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 381
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 392
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 399
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 427
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 435
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 459
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 475
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 501
+          },
+          {
+           "item": "3001",
+           "tier": 3,
+           "second": 558
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 581
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 605
+          },
+          {
+           "item": "2208",
+           "tier": 3,
+           "second": 685
+          },
+          {
+           "item": "3207",
+           "tier": 3,
+           "second": 784
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "team": "ONIC",
+       "totals": {
+        "kills": 1,
+        "assists": 3,
+        "deaths": 14,
+        "gold": 31919,
+        "goldPerMinute": 2359,
+        "damage": 117566,
+        "redBuffs": 2,
+        "blueBuffs": 5,
+        "lords": 0,
+        "turtles": 0,
+        "towers": 3
+       },
+       "players": [
+        {
+         "nickname": "Savero",
+         "hero": "Freya",
+         "kills": 1,
+         "deaths": 2,
+         "assists": 0,
+         "gold": 7667,
+         "hero_damage": 23669,
+         "damage_taken": 73975,
+         "tower_damage": 4079,
+         "items": [
+          "2301",
+          "2009",
+          "2013",
+          "2008",
+          "2103"
+         ],
+         "emblem": "20007",
+         "talents": [
+          "111",
+          "721"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 15
+          },
+          {
+           "item": "1002",
+           "tier": 1,
+           "second": 71
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 88
+          },
+          {
+           "item": "1006",
+           "tier": 1,
+           "second": 97
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 103
+          },
+          {
+           "item": "2009",
+           "tier": 2,
+           "second": 221
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 248
+          },
+          {
+           "item": "2301",
+           "tier": 3,
+           "second": 269
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 294
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 348
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 398
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 472
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 522
+          },
+          {
+           "item": "1002",
+           "tier": 1,
+           "second": 538
+          },
+          {
+           "item": "1007",
+           "tier": 1,
+           "second": 602
+          },
+          {
+           "item": "1002",
+           "tier": 1,
+           "second": 626
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 654
+          },
+          {
+           "item": "1006",
+           "tier": 1,
+           "second": 664
+          },
+          {
+           "item": "2008",
+           "tier": 3,
+           "second": 700
+          },
+          {
+           "item": "2103",
+           "tier": 2,
+           "second": 801
+          }
+         ]
+        },
+        {
+         "nickname": "K1NGKONG",
+         "hero": "Aulus",
+         "kills": 0,
+         "deaths": 3,
+         "assists": 1,
+         "gold": 7161,
+         "hero_damage": 29432,
+         "damage_taken": 46402,
+         "tower_damage": 264,
+         "items": [
+          "3432",
+          "2013",
+          "2208",
+          "3001"
+         ],
+         "emblem": "20007",
+         "talents": [
+          "111",
+          "122",
+          "531"
+         ],
+         "purchases": [
+          {
+           "item": "1412",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 52
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 77
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 79
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 149
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 199
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 276
+          },
+          {
+           "item": "3432",
+           "tier": 3,
+           "second": 370
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 406
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 472
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 518
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 565
+          },
+          {
+           "item": "2208",
+           "tier": 3,
+           "second": 637
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 672
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 733
+          },
+          {
+           "item": "3001",
+           "tier": 3,
+           "second": 808
+          }
+         ]
+        },
+        {
+         "nickname": "Brusko",
+         "hero": "Marcel",
+         "kills": 0,
+         "deaths": 3,
+         "assists": 1,
+         "gold": 6117,
+         "hero_damage": 19024,
+         "damage_taken": 55267,
+         "tower_damage": 0,
+         "items": [
+          "3561",
+          "2212",
+          "3112",
+          "1202",
+          "2203",
+          "1203"
+         ],
+         "emblem": "20008",
+         "talents": [
+          "811",
+          "121",
+          "132"
+         ],
+         "purchases": [
+          {
+           "item": "1511",
+           "tier": 1,
+           "second": 3
+          },
+          {
+           "item": "1204",
+           "tier": 1,
+           "second": 32
+          },
+          {
+           "item": "3561",
+           "tier": 3,
+           "second": 81
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 127
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 173
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 211
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 256
+          },
+          {
+           "item": "2212",
+           "tier": 3,
+           "second": 374
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 426
+          },
+          {
+           "item": "2101",
+           "tier": 2,
+           "second": 495
+          },
+          {
+           "item": "1104",
+           "tier": 1,
+           "second": 549
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 584
+          },
+          {
+           "item": "3112",
+           "tier": 3,
+           "second": 617
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 637
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 654
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 714
+          },
+          {
+           "item": "2203",
+           "tier": 2,
+           "second": 752
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 788
+          }
+         ]
+        },
+        {
+         "nickname": "SuperFrince",
+         "hero": "Luo Yi",
+         "kills": 0,
+         "deaths": 4,
+         "assists": 0,
+         "gold": 5103,
+         "hero_damage": 28195,
+         "damage_taken": 35898,
+         "tower_damage": 0,
+         "items": [
+          "2308",
+          "3105",
+          "3101",
+          "1101"
+         ],
+         "emblem": "20006",
+         "talents": [
+          "611",
+          "321",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 67
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 97
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 161
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 228
+          },
+          {
+           "item": "1103",
+           "tier": 1,
+           "second": 301
+          },
+          {
+           "item": "2308",
+           "tier": 3,
+           "second": 313
+          },
+          {
+           "item": "3105",
+           "tier": 3,
+           "second": 481
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 519
+          },
+          {
+           "item": "2101",
+           "tier": 2,
+           "second": 596
+          },
+          {
+           "item": "3101",
+           "tier": 3,
+           "second": 734
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 799
+          }
+         ]
+        },
+        {
+         "nickname": "Kirk",
+         "hero": "Minotaur",
+         "kills": 0,
+         "deaths": 2,
+         "assists": 1,
+         "gold": 5871,
+         "hero_damage": 17246,
+         "damage_taken": 88422,
+         "tower_damage": 0,
+         "items": [
+          "2302",
+          "3203",
+          "3112",
+          "2203"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "311",
+          "321",
+          "331"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 5
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 61
+          },
+          {
+           "item": "2205",
+           "tier": 2,
+           "second": 115
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 151
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 165
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 225
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 279
+          },
+          {
+           "item": "3203",
+           "tier": 3,
+           "second": 401
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 452
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 488
+          },
+          {
+           "item": "2101",
+           "tier": 2,
+           "second": 566
+          },
+          {
+           "item": "1104",
+           "tier": 1,
+           "second": 626
+          },
+          {
+           "item": "3112",
+           "tier": 3,
+           "second": 647
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 685
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 716
+          },
+          {
+           "item": "2203",
+           "tier": 2,
+           "second": 787
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "game_number": 2,
+     "duration_seconds": 673,
+     "winner": "TLPH",
+     "sides": [
+      {
+       "team": "TLPH",
+       "totals": {
+        "kills": 12,
+        "assists": 40,
+        "deaths": 1,
+        "gold": 38310,
+        "goldPerMinute": 3416,
+        "damage": 169633,
+        "redBuffs": 5,
+        "blueBuffs": 10,
+        "lords": 1,
+        "turtles": 3,
+        "towers": 7
+       },
+       "players": [
+        {
+         "nickname": "Sanford",
+         "hero": "Alice",
+         "kills": 2,
+         "deaths": 0,
+         "assists": 10,
+         "gold": 6806,
+         "hero_damage": 33322,
+         "damage_taken": 65416,
+         "tower_damage": 2546,
+         "items": [
+          "3204",
+          "2306",
+          "3212",
+          "2201",
+          "1205",
+          "1008"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "311",
+          "721",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 42
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 144
+          },
+          {
+           "item": "3204",
+           "tier": 3,
+           "second": 217
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 239
+          },
+          {
+           "item": "1204",
+           "tier": 1,
+           "second": 252
+          },
+          {
+           "item": "2306",
+           "tier": 3,
+           "second": 300
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 306
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 343
+          },
+          {
+           "item": "2206",
+           "tier": 2,
+           "second": 372
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 417
+          },
+          {
+           "item": "3212",
+           "tier": 3,
+           "second": 501
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 550
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 562
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 602
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 654
+          }
+         ]
+        },
+        {
+         "nickname": "KarlTzy",
+         "hero": "Hirara",
+         "kills": 9,
+         "deaths": 0,
+         "assists": 1,
+         "gold": 10041,
+         "hero_damage": 45393,
+         "damage_taken": 22705,
+         "tower_damage": 8999,
+         "items": [
+          "3432",
+          "3009",
+          "2014",
+          "2013",
+          "3001",
+          "2001"
+         ],
+         "emblem": "20005",
+         "talents": [
+          "111",
+          "122",
+          "531"
+         ],
+         "purchases": [
+          {
+           "item": "1412",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 50
+          },
+          {
+           "item": "2004",
+           "tier": 2,
+           "second": 107
+          },
+          {
+           "item": "3432",
+           "tier": 3,
+           "second": 174
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 232
+          },
+          {
+           "item": "2014",
+           "tier": 3,
+           "second": 343
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 357
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 368
+          },
+          {
+           "item": "3009",
+           "tier": 3,
+           "second": 396
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 418
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 438
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 441
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 472
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 496
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 523
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 543
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 560
+          },
+          {
+           "item": "3001",
+           "tier": 3,
+           "second": 625
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 635
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 663
+          }
+         ]
+        },
+        {
+         "nickname": "Sanji",
+         "hero": "Zhuxin",
+         "kills": 1,
+         "deaths": 0,
+         "assists": 10,
+         "gold": 7291,
+         "hero_damage": 39595,
+         "damage_taken": 34462,
+         "tower_damage": 975,
+         "items": [
+          "2105",
+          "2306",
+          "3105",
+          "3104",
+          "2201",
+          "1205"
+         ],
+         "emblem": "20001",
+         "talents": [
+          "811",
+          "321",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1102",
+           "tier": 1,
+           "second": 15
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 55
+          },
+          {
+           "item": "2105",
+           "tier": 2,
+           "second": 82
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 121
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 144
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 184
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 224
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 248
+          },
+          {
+           "item": "3105",
+           "tier": 3,
+           "second": 316
+          },
+          {
+           "item": "1204",
+           "tier": 1,
+           "second": 338
+          },
+          {
+           "item": "2306",
+           "tier": 3,
+           "second": 371
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 392
+          },
+          {
+           "item": "1105",
+           "tier": 1,
+           "second": 417
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 451
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 478
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 496
+          },
+          {
+           "item": "3104",
+           "tier": 3,
+           "second": 555
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 580
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 620
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 644
+          }
+         ]
+        },
+        {
+         "nickname": "Jaypee",
+         "hero": "Hylos",
+         "kills": 0,
+         "deaths": 1,
+         "assists": 10,
+         "gold": 6362,
+         "hero_damage": 16295,
+         "damage_taken": 81597,
+         "tower_damage": 1773,
+         "items": [
+          "3511",
+          "2105",
+          "3212",
+          "3207"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "711",
+          "321",
+          "331"
+         ],
+         "purchases": [
+          {
+           "item": "1512",
+           "tier": 1,
+           "second": 5
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 7
+          },
+          {
+           "item": "1511",
+           "tier": 1,
+           "second": 51
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 107
+          },
+          {
+           "item": "2105",
+           "tier": 2,
+           "second": 133
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 174
+          },
+          {
+           "item": "3511",
+           "tier": 3,
+           "second": 194
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 238
+          },
+          {
+           "item": "2206",
+           "tier": 2,
+           "second": 293
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 331
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 377
+          },
+          {
+           "item": "3212",
+           "tier": 3,
+           "second": 462
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 503
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 529
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 555
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 565
+          },
+          {
+           "item": "3207",
+           "tier": 3,
+           "second": 646
+          }
+         ]
+        },
+        {
+         "nickname": "Teddy",
+         "hero": "cici",
+         "kills": 0,
+         "deaths": 0,
+         "assists": 9,
+         "gold": 7810,
+         "hero_damage": 35028,
+         "damage_taken": 27346,
+         "tower_damage": 10418,
+         "items": [
+          "2013",
+          "2302",
+          "3208",
+          "3009",
+          "1205"
+         ],
+         "emblem": "20007",
+         "talents": [
+          "811",
+          "721",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 26
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 67
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 69
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 128
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 163
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 218
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 249
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 261
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 301
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 329
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 361
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 405
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 418
+          },
+          {
+           "item": "3208",
+           "tier": 3,
+           "second": 464
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 483
+          },
+          {
+           "item": "2004",
+           "tier": 2,
+           "second": 521
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 561
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 586
+          },
+          {
+           "item": "3009",
+           "tier": 3,
+           "second": 623
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 655
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "team": "ONIC",
+       "totals": {
+        "kills": 1,
+        "assists": 3,
+        "deaths": 12,
+        "gold": 26911,
+        "goldPerMinute": 2399,
+        "damage": 144044,
+        "redBuffs": 6,
+        "blueBuffs": 3,
+        "lords": 0,
+        "turtles": 0,
+        "towers": 2
+       },
+       "players": [
+        {
+         "nickname": "SuperFrince",
+         "hero": "Valentina",
+         "kills": 0,
+         "deaths": 2,
+         "assists": 1,
+         "gold": 5019,
+         "hero_damage": 38769,
+         "damage_taken": 40886,
+         "tower_damage": 665,
+         "items": [
+          "2302",
+          "3105",
+          "3101",
+          "1101"
+         ],
+         "emblem": "20001",
+         "talents": [
+          "611",
+          "621",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 41
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 86
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 123
+          },
+          {
+           "item": "2104",
+           "tier": 2,
+           "second": 160
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 185
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 212
+          },
+          {
+           "item": "3105",
+           "tier": 3,
+           "second": 337
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 384
+          },
+          {
+           "item": "2101",
+           "tier": 2,
+           "second": 446
+          },
+          {
+           "item": "3101",
+           "tier": 3,
+           "second": 580
+          },
+          {
+           "item": "1101",
+           "tier": 1,
+           "second": 625
+          }
+         ]
+        },
+        {
+         "nickname": "Brusko",
+         "hero": "Kalea",
+         "kills": 0,
+         "deaths": 4,
+         "assists": 1,
+         "gold": 4450,
+         "hero_damage": 17591,
+         "damage_taken": 56580,
+         "tower_damage": 0,
+         "items": [
+          "3521",
+          "3204",
+          "2206",
+          "2201"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "711",
+          "821",
+          "331"
+         ],
+         "purchases": [
+          {
+           "item": "1511",
+           "tier": 1,
+           "second": 3
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 53
+          },
+          {
+           "item": "3521",
+           "tier": 3,
+           "second": 106
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 177
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 291
+          },
+          {
+           "item": "3204",
+           "tier": 3,
+           "second": 405
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 440
+          },
+          {
+           "item": "2206",
+           "tier": 2,
+           "second": 506
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 558
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 601
+          }
+         ]
+        },
+        {
+         "nickname": "Kirk",
+         "hero": "Minotaur",
+         "kills": 0,
+         "deaths": 2,
+         "assists": 1,
+         "gold": 4804,
+         "hero_damage": 19492,
+         "damage_taken": 87109,
+         "tower_damage": 0,
+         "items": [
+          "2302",
+          "3206",
+          "3204"
+         ],
+         "emblem": "20003",
+         "talents": [
+          "311",
+          "321",
+          "331"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 11
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 59
+          },
+          {
+           "item": "2302",
+           "tier": 3,
+           "second": 81
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 107
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 167
+          },
+          {
+           "item": "2204",
+           "tier": 2,
+           "second": 200
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 221
+          },
+          {
+           "item": "1203",
+           "tier": 1,
+           "second": 259
+          },
+          {
+           "item": "3206",
+           "tier": 3,
+           "second": 354
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 435
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 533
+          },
+          {
+           "item": "3204",
+           "tier": 3,
+           "second": 641
+          }
+         ]
+        },
+        {
+         "nickname": "K1NGKONG",
+         "hero": "Yi Sun-shin",
+         "kills": 1,
+         "deaths": 2,
+         "assists": 0,
+         "gold": 6056,
+         "hero_damage": 34506,
+         "damage_taken": 19668,
+         "tower_damage": 2832,
+         "items": [
+          "3432",
+          "3009",
+          "2014",
+          "2001"
+         ],
+         "emblem": "20005",
+         "talents": [
+          "111",
+          "122",
+          "531"
+         ],
+         "purchases": [
+          {
+           "item": "1412",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 48
+          },
+          {
+           "item": "2004",
+           "tier": 2,
+           "second": 110
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 174
+          },
+          {
+           "item": "2014",
+           "tier": 3,
+           "second": 271
+          },
+          {
+           "item": "3432",
+           "tier": 3,
+           "second": 323
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 377
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 412
+          },
+          {
+           "item": "3009",
+           "tier": 3,
+           "second": 464
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 490
+          },
+          {
+           "item": "2001",
+           "tier": 2,
+           "second": 597
+          }
+         ]
+        },
+        {
+         "nickname": "Savero",
+         "hero": "Aulus",
+         "kills": 0,
+         "deaths": 2,
+         "assists": 0,
+         "gold": 6582,
+         "hero_damage": 33686,
+         "damage_taken": 68894,
+         "tower_damage": 1750,
+         "items": [
+          "1202",
+          "2013",
+          "2303",
+          "2208",
+          "2103",
+          "1005"
+         ],
+         "emblem": "20007",
+         "talents": [
+          "111",
+          "721",
+          "731"
+         ],
+         "purchases": [
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 2
+          },
+          {
+           "item": "1202",
+           "tier": 1,
+           "second": 20
+          },
+          {
+           "item": "1001",
+           "tier": 1,
+           "second": 65
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 95
+          },
+          {
+           "item": "2002",
+           "tier": 2,
+           "second": 105
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 137
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 199
+          },
+          {
+           "item": "2013",
+           "tier": 3,
+           "second": 255
+          },
+          {
+           "item": "1301",
+           "tier": 1,
+           "second": 275
+          },
+          {
+           "item": "2303",
+           "tier": 3,
+           "second": 324
+          },
+          {
+           "item": "1201",
+           "tier": 1,
+           "second": 367
+          },
+          {
+           "item": "2201",
+           "tier": 2,
+           "second": 379
+          },
+          {
+           "item": "1205",
+           "tier": 1,
+           "second": 418
+          },
+          {
+           "item": "1008",
+           "tier": 1,
+           "second": 450
+          },
+          {
+           "item": "2208",
+           "tier": 3,
+           "second": 495
+          },
+          {
+           "item": "1103",
+           "tier": 1,
+           "second": 530
+          },
+          {
+           "item": "2103",
+           "tier": 2,
+           "second": 597
+          },
+          {
+           "item": "1005",
+           "tier": 1,
+           "second": 645
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
   },
   {
    "date": "Sunday, 11 October 2026",

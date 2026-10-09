@@ -10,7 +10,12 @@
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { isFinished, latestFinishedWith, parseSchedule } from './parse';
+import {
+  dataSlugOf,
+  isFinished,
+  latestFinishedWith,
+  parseSchedule,
+} from './parse';
 
 const BASE = 'https://ph-mpl.com';
 const REFERENCE_BASE = 'https://arena.rone.dev';
@@ -116,17 +121,29 @@ async function main(): Promise<void> {
   const itemFile = (slug: string, game: number) =>
     `items-${slug}-g${game}.html`;
 
+  const today = Date.now();
   for (const match of matches) {
     // Only finished series: one in progress already has a data page and a
-    // running score, but no item sequence for the game being played.
-    if (!match.dataSlug || !isFinished(match)) continue;
-    const slug = match.dataSlug;
+    // running score, but no item sequence for the game being played. The
+    // schedule can lag behind the data pages, so a match already played that
+    // it has not scored yet is tried at its usual slug; the build accepts it
+    // only if its games make a decided series.
+    const alreadyPlayed =
+      Date.parse(`${match.date.replace(/^\w+, /, '')} UTC`) <= today;
+    const slug = isFinished(match)
+      ? match.dataSlug
+      : alreadyPlayed && !match.dataSlug
+        ? dataSlugOf(match)
+        : null;
+    if (!slug) continue;
     const pageFile = join(CACHE_DIR, `match-${slug}.html`);
     const cachedBattles = existsSync(pageFile)
       ? battlesOf(readFileSync(pageFile, 'utf8'))
       : [];
     if (
       !refresh &&
+      // An unscored series may still be running: always look again.
+      isFinished(match) &&
       cachedBattles.length > 0 &&
       cachedBattles.every(({ game }) =>
         existsSync(join(CACHE_DIR, itemFile(slug, game))),
@@ -136,7 +153,13 @@ async function main(): Promise<void> {
     }
     // A fresh page load gives the session + CSRF token its item loader needs.
     cookies.clear();
-    const page = await get(`/data/match/${slug}`, `match-${slug}.html`, true);
+    let page: string;
+    try {
+      page = await get(`/data/match/${slug}`, `match-${slug}.html`, true);
+    } catch (error) {
+      console.warn(`no data page for ${slug} yet (${String(error)})`);
+      continue;
+    }
     const token = /_token:\s*"([^"]+)"/.exec(page)?.[1];
     const battles = battlesOf(page);
     if (!token || battles.length === 0) {

@@ -228,6 +228,10 @@
    "name": "Rapid Boots",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2306.png"
   },
+  "2308": {
+   "name": "Demon Boots",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/2308.png"
+  },
   "3001": {
    "name": "Malefic Roar",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3001.png"
@@ -364,6 +368,10 @@
    "name": "Flame Hunter's Rapid Boots",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3462.png"
   },
+  "3511": {
+   "name": "Warrior Boots - Conceal",
+   "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3511.png"
+  },
   "3521": {
    "name": "Tough Boots - Conceal",
    "icon_url": "https://ik.imagekit.io/nloe8dhf7w/mlbb/2024/equipments/3521.png"
@@ -491,6 +499,12 @@
    "lanes": [
     "Exp Lane",
     "Jungle"
+   ]
+  },
+  "Arlott": {
+   "icon_url": "https://mlbb-image.scoregg.com/hero_h/120.png",
+   "lanes": [
+    "Exp Lane"
    ]
   },
   "Atlas": {
@@ -626,6 +640,12 @@
    "lanes": [
     "Exp Lane",
     "Jungle"
+   ]
+  },
+  "Luo Yi": {
+   "icon_url": "https://mlbb-image.scoregg.com/m/27/p/256/0515305498813.png",
+   "lanes": [
+    "Mid Lane"
    ]
   },
   "Lylia": {
