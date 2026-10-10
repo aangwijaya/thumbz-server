@@ -52,8 +52,13 @@ export class HomeService {
     private readonly tickets: TicketsService,
   ) {}
 
-  async getHome(sub?: string): Promise<{ data: HomePayload }> {
+  async getHome(
+    sub?: string,
+    tournamentId?: string,
+  ): Promise<{ data: HomePayload }> {
     const now = new Date();
+    // One tournament's sections when asked; featured tournaments and history stay global.
+    const scope = tournamentId ? { tournament_id: tournamentId } : {};
     const ninetyDaysAgo = new Date(Date.now() - NINETY_DAYS_MS);
 
     const [
@@ -65,18 +70,18 @@ export class HomeService {
       completedRows,
     ] = await Promise.all([
       this.prisma.match.findFirst({
-        where: { status: 'live', featured: true },
+        where: { ...scope, status: 'live', featured: true },
         orderBy: { started_at: 'desc' },
         include: DETAIL_INCLUDE,
       }),
       this.prisma.match.findMany({
-        where: { status: 'live' },
+        where: { ...scope, status: 'live' },
         orderBy: [{ viewer_count: 'desc' }, { started_at: 'asc' }],
         take: 8,
         include: SUMMARY_INCLUDE,
       }),
       this.prisma.match.findMany({
-        where: { status: 'scheduled', scheduled_at: { gte: now } },
+        where: { ...scope, status: 'scheduled', scheduled_at: { gte: now } },
         orderBy: { scheduled_at: 'asc' },
         take: 8,
         include: SUMMARY_INCLUDE,
@@ -88,12 +93,14 @@ export class HomeService {
         select: TOURNAMENT_SUMMARY_SELECT,
       }),
       this.prisma.video.findMany({
+        where: tournamentId ? { match: { tournament_id: tournamentId } } : {},
         orderBy: { published_at: 'desc' },
         take: 12,
         include: VIDEO_INCLUDE,
       }),
       this.prisma.match.findMany({
         where: {
+          ...scope,
           status: 'completed',
           ended_at: { gte: ninetyDaysAgo },
         },

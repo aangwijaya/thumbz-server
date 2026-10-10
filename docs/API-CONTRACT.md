@@ -957,6 +957,12 @@ Single `VideoSummary` (same shape as list items). `404` when unknown.
 
 **Purpose:** single homepage payload (design §5 homepage sections). Optional auth: when a valid Bearer token is present, `continue_watching` is populated.
 
+**Query params:**
+
+| Param | Type | Notes |
+| --- | --- | --- |
+| `tournament_id` | uuid | optional; scopes `featured_live_match`, `live_now`, `upcoming`, `latest_videos` (by the video's match) and `popular_teams` (completed matches of that tournament) to one tournament. `featured_tournaments` and `continue_watching` are never scoped. An unknown id returns empty scoped sections; a malformed one is `400 VALIDATION_ERROR`. |
+
 **Response:**
 
 ```json

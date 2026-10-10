@@ -16,6 +16,7 @@ describe('HomeService (integration, local Postgres)', () => {
   let teamBId: string;
   let completedMatchId: string;
   let liveMatchId: string;
+  let tournamentId: string;
 
   beforeAll(async () => {
     prisma = new PrismaService();
@@ -41,8 +42,21 @@ describe('HomeService (integration, local Postgres)', () => {
     });
     teamBId = teamB.id;
 
+    const tournament = await prisma.tournament.create({
+      data: {
+        slug: 'e2e-home-league',
+        name: 'E2E Home League',
+        status: 'ongoing',
+        region: 'e2e-home-region',
+        start_date: new Date('2026-08-01T00:00:00Z'),
+        end_date: new Date('2026-11-01T00:00:00Z'),
+      },
+    });
+    tournamentId = tournament.id;
+
     const live = await prisma.match.create({
       data: {
+        tournament_id: tournamentId,
         team_a_id: teamAId,
         team_b_id: teamBId,
         status: 'live',
@@ -83,6 +97,7 @@ describe('HomeService (integration, local Postgres)', () => {
     await prisma.team.deleteMany({
       where: { id: { in: [teamAId, teamBId] } },
     });
+    await prisma.tournament.delete({ where: { id: tournamentId } });
     await prisma.profile.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
@@ -101,5 +116,20 @@ describe('HomeService (integration, local Postgres)', () => {
     expect(item?.duration_seconds).toBe(1200);
     expect(item?.match.id).toBe(completedMatchId);
     expect(item?.match.status).toBe('completed');
+  });
+
+  it('scopes live matches to one tournament', async () => {
+    const { data } = await home.getHome(undefined, tournamentId);
+    expect(data.live_now.map((match) => match.id)).toEqual([liveMatchId]);
+    expect(data.live_now[0]?.tournament_id).toBe(tournamentId);
+  });
+
+  it('returns empty scoped sections for an unknown tournament', async () => {
+    const { data } = await home.getHome(undefined, randomUUID());
+    expect(data.featured_live_match).toBeNull();
+    expect(data.live_now).toEqual([]);
+    expect(data.upcoming).toEqual([]);
+    expect(data.latest_videos).toEqual([]);
+    expect(data.popular_teams).toEqual([]);
   });
 });

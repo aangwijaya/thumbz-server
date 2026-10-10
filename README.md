@@ -66,7 +66,7 @@ cp .env.example .env              # local values; never put cloud credentials he
 npm ci
 docker compose up -d postgres redis   # Postgres on 44322, Redis on 6379
 npx prisma migrate deploy
-npx prisma db seed                    # MPL PH S18 week 8: replays, live, upcoming (local DB only)
+npx prisma db seed                    # MPL PH + MPL ID S18 week 8: replays, live, upcoming (local DB only)
 npm run start:dev                     # API on :3001  (Swagger: /docs)
 npm run start:worker:dev              # jobs; LIVE_SIMULATOR=true replays the live matches
 ```
@@ -127,6 +127,12 @@ purchase sequence of every game. Names of items, emblems and talents come from
 MLBB Academy reference data. Dates are shifted around "now": the first day's
 matches are yesterday's replays, the middle day's are live (the worker replays
 the recorded games, looping), the last day's are upcoming with tickets.
+
+**MPL Indonesia Season 18** is demo data built from the same week: every MPL PH
+team is swapped for an MPL ID team and each player for the MPL ID player in the
+same role (`indonesiaFrom()` in `prisma/seed.ts`), so the games, builds and
+item sequences are the PH ones under Indonesian names. Its calendar runs an
+hour earlier, with Bahasa Indonesia + English broadcasts.
 
 ```bash
 npm run data:fetch -- --week 8   # polite: robots.txt paths only, cached in data-cache/
