@@ -2089,7 +2089,17 @@
     "/api/v1/home": {
       "get": {
         "operationId": "Home_getHome",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "tournament_id",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
