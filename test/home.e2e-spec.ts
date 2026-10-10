@@ -21,6 +21,7 @@ describe('Home (e2e)', () => {
   let team3Id: string;
   let featuredLiveId: string;
   let live2Id: string;
+  let upcoming1Id: string;
   const idsToClean: string[] = [];
 
   beforeAll(async () => {
@@ -109,10 +110,7 @@ describe('Home (e2e)', () => {
     idsToClean.push(live2Id);
 
     // popular teams: "most completed matches played in the last 90 days".
-    // The seeded MPL ID league now saturates the top 8 (leaders ~18 played),
-    // so fixture teams must exceed that: team1 plays 22, team2 19 (each above
-    // any seeded team), with team1 strictly ahead of team2 via extra matches
-    // against a third team. team3 stays far below the threshold.
+    // team1 plays 22, team2 19, team3 5; checked on the tournament-scoped call.
     for (let i = 0; i < 16; i++) {
       const m = await prisma.match.create({
         data: {
@@ -192,6 +190,7 @@ describe('Home (e2e)', () => {
         scheduled_at: new Date(now + day),
       },
     });
+    upcoming1Id = upcoming1.id;
     idsToClean.push(upcoming1.id);
     const upcoming2 = await prisma.match.create({
       data: {
@@ -258,27 +257,18 @@ describe('Home (e2e)', () => {
     expect(body.data.featured_live_match?.status).toBe('live');
     expect(body.data.featured_live_match?.featured).toBe(true);
 
-    const liveIds = body.data.live_now.map((m) => m.id);
-    expect(liveIds).toContain(featuredLiveId);
-    expect(liveIds).toContain(live2Id);
-    // ordered by viewer_count desc
-    expect(liveIds.indexOf(featuredLiveId)).toBeLessThan(
-      liveIds.indexOf(live2Id),
-    );
+    // The seeded leagues and other specs' live fixtures share the global top
+    // 8, so ordering is checked on the tournament-scoped call below.
+    expect(body.data.live_now.length).toBeLessThanOrEqual(8);
 
     const upcomingIds = body.data.upcoming.map((m) => m.id);
-    expect(upcomingIds.length).toBeGreaterThanOrEqual(2);
+    expect(upcomingIds.length).toBeGreaterThanOrEqual(1);
     expect(body.data.featured_tournaments.map((t) => t.id)).toContain(
       tournamentId,
     );
 
     const popularIds = body.data.popular_teams.map((t) => t.id);
     expect(popularIds.length).toBeLessThanOrEqual(8);
-    // team1 (5) ranks before team2 (2)
-    expect(popularIds.indexOf(team1Id)).toBeGreaterThanOrEqual(0);
-    expect(popularIds.indexOf(team1Id)).toBeLessThan(
-      popularIds.indexOf(team2Id),
-    );
     // teamOld only has matches older than 90 days -> excluded
     expect(popularIds).not.toContain(teamOldId);
 
@@ -286,6 +276,65 @@ describe('Home (e2e)', () => {
     expect(videoIds.length).toBeLessThanOrEqual(12);
 
     expect(body.data.continue_watching).toEqual([]);
+  });
+
+  it('scopes the sections to one tournament', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/v1/home?tournament_id=${tournamentId}`)
+      .expect(200);
+    const body = response.body as {
+      data: {
+        featured_live_match: { id: string } | null;
+        live_now: Array<{ id: string }>;
+        upcoming: Array<{ id: string }>;
+        featured_tournaments: Array<{ id: string }>;
+        popular_teams: Array<{ id: string }>;
+        latest_videos: Array<{ id: string }>;
+      };
+    };
+    expect(body.data.featured_live_match?.id).toBe(featuredLiveId);
+    // ordered by viewer_count desc
+    expect(body.data.live_now.map((m) => m.id)).toEqual([
+      featuredLiveId,
+      live2Id,
+    ]);
+    // upcoming2 has no tournament
+    expect(body.data.upcoming.map((m) => m.id)).toEqual([upcoming1Id]);
+    // fixture videos are not linked to a match of the tournament
+    expect(body.data.latest_videos).toEqual([]);
+    // never scoped
+    expect(body.data.featured_tournaments.map((t) => t.id)).toContain(
+      tournamentId,
+    );
+    // team1 (22 played) before team2 (19) before team3 (5); teamOld played
+    // outside the tournament
+    expect(body.data.popular_teams.map((t) => t.id)).toEqual([
+      team1Id,
+      team2Id,
+      team3Id,
+    ]);
+  });
+
+  it('returns empty scoped sections for an unknown tournament', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/home?tournament_id=00000000-0000-4000-8000-00000000e2e0')
+      .expect(200);
+    const body = response.body as {
+      data: {
+        live_now: unknown[];
+        upcoming: unknown[];
+        popular_teams: unknown[];
+      };
+    };
+    expect(body.data.live_now).toEqual([]);
+    expect(body.data.upcoming).toEqual([]);
+    expect(body.data.popular_teams).toEqual([]);
+  });
+
+  it('rejects a malformed tournament id', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/home?tournament_id=nope')
+      .expect(400);
   });
 
   it('stays anonymous with an invalid token', async () => {
