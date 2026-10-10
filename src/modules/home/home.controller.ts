@@ -1,7 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
+import { HomeQueryDto } from './dto/home-query.dto';
 import { HomePayload, HomeService } from './home.service';
 import { Cached } from '../../infra/cache/cached.decorator';
 import { CacheTags } from '../../infra/cache/cache-tags';
@@ -20,7 +21,8 @@ export class HomeController {
   @Get()
   getHome(
     @CurrentUser() user: { sub: string } | undefined,
+    @Query() query: HomeQueryDto,
   ): Promise<{ data: HomePayload }> {
-    return this.homeService.getHome(user?.sub);
+    return this.homeService.getHome(user?.sub, query.tournament_id);
   }
 }
