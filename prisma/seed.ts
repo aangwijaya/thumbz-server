@@ -22,6 +22,8 @@ const prisma = new PrismaClient();
 //   - its second day            → live: recorded games replayed by the worker
 //                                  (LIVE_SIMULATOR=true), looping forever;
 //   - its last day              → upcoming tomorrow, the only ones with tickets.
+// The same week is seeded a second time as MPL Indonesia demo data (teams and
+// rosters swapped, see indonesiaFrom()).
 // Re-running the seed replaces all catalog data (tournaments, teams, players,
 // matches, videos); user accounts, favorites of other things and registered
 // media assets are kept.
@@ -137,6 +139,304 @@ const slugify = (value: string): string =>
 const json = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
+// ---- leagues ----
+interface League {
+  slug: string;
+  /** Short label used in video titles. */
+  short: string;
+  region: string;
+  country: string;
+  /** Prefix that keeps player slugs unique across leagues. */
+  playerSlugPrefix: string;
+  /** Tournament start, in days from today; it runs 90 days. */
+  startDay: number;
+  prizePool: string | null;
+  description: string;
+  colors: Record<string, [string, string]>;
+  /** Moves the league's calendar (and its live start times) in time. */
+  shiftMs: number;
+  liveOffsetsMin: number[];
+  liveViewers: number[];
+  liveThumb: string;
+  broadcasts: Array<{ language: 'en' | 'id' | 'tl'; share: number }>;
+  venue: { name: string; city: string };
+}
+
+const PH: League = {
+  slug: 'mpl-ph-s18',
+  short: 'MPL PH',
+  region: 'Philippines',
+  country: 'PH',
+  playerSlugPrefix: '',
+  startDay: -50,
+  prizePool: null,
+  description:
+    'Regular season, week 8. Real match data from ph-mpl.com: rosters, heroes, builds, emblems, talents and item sequences.',
+  colors: TEAM_COLORS,
+  shiftMs: 0,
+  liveOffsetsMin: LIVE_OFFSETS_MIN,
+  liveViewers: LIVE_VIEWERS,
+  liveThumb: SEED_LIVE_THUMB,
+  broadcasts: [
+    { language: 'en', share: 0.35 },
+    { language: 'tl', share: 0.65 },
+  ],
+  venue: { name: 'Studio MPL PH, Shangri-La Plaza', city: 'Mandaluyong' },
+};
+
+// MPL Indonesia is demo data: the MPL PH week replayed with Indonesian teams
+// and rosters (team code → team; each player takes the role of the PH player
+// in the same seat). Starts a week earlier, so MPL PH stays the default
+// tournament, and an hour earlier, so MPL PH keeps the global featured match.
+const ID_LOGO = (file: string) =>
+  `https://ik.imagekit.io/nloe8dhf7w/mplid/s14/teams/${file}`;
+const ID_TEAMS: Record<
+  string,
+  {
+    code: string;
+    name: string;
+    logo: string;
+    colors: [string, string];
+    roster: Record<'gold' | 'mid' | 'exp' | 'jungle' | 'roam', string>;
+  }
+> = {
+  ONIC: {
+    code: 'ONIC',
+    name: 'ONIC Esports',
+    logo: ID_LOGO('onic-b-256.png'),
+    colors: ['#F5C518', '#0A0A0A'],
+    roster: {
+      gold: 'Alberttt',
+      mid: 'Sanz',
+      exp: 'CW',
+      jungle: 'Kairi',
+      roam: 'Kiboy',
+    },
+  },
+  APBR: {
+    code: 'RRQ',
+    name: 'RRQ Hoshi',
+    logo: ID_LOGO('rrq-500.png'),
+    colors: ['#F28C00', '#111111'],
+    roster: {
+      gold: 'Skylar',
+      mid: 'Clayyy',
+      exp: 'Brusko',
+      jungle: 'Ferxiic',
+      roam: 'Said',
+    },
+  },
+  FLCN: {
+    code: 'EVOS',
+    name: 'EVOS Legends',
+    logo: ID_LOGO('evos-500.png'),
+    colors: ['#1E90FF', '#FFFFFF'],
+    roster: {
+      gold: 'Branz',
+      mid: 'Clover',
+      exp: 'Fluffy',
+      jungle: 'Tazz',
+      roam: 'Muezza',
+    },
+  },
+  OMG: {
+    code: 'BTR',
+    name: 'Bigetron by Vitality',
+    logo: ID_LOGO('btr_vit.png'),
+    colors: ['#E53935', '#111111'],
+    roster: {
+      gold: 'Kzy',
+      mid: 'Xinnn',
+      exp: 'Moreno',
+      jungle: 'Saken',
+      roam: 'Finn',
+    },
+  },
+  TLPH: {
+    code: 'TLID',
+    name: 'Team Liquid ID',
+    logo: ID_LOGO('TLID-Primary500x500.png'),
+    colors: ['#0C223F', '#00A9E0'],
+    roster: {
+      gold: 'AriZ',
+      mid: 'Ciku',
+      exp: 'Ridd',
+      jungle: 'Faviannn',
+      roam: 'lyoni',
+    },
+  },
+  RORA: {
+    code: 'AE',
+    name: 'Alter Ego',
+    logo: ID_LOGO('ae-256.png'),
+    colors: ['#E91E63', '#111111'],
+    roster: {
+      gold: 'Damar',
+      mid: 'Reza',
+      exp: 'Fitra',
+      jungle: 'Bagus',
+      roam: 'ALEXANDER',
+    },
+  },
+  TNC: {
+    code: 'DEWA',
+    name: 'Dewa United Esports',
+    logo: ID_LOGO('dewa-united-500.png'),
+    colors: ['#16A34A', '#F2F2F2'],
+    roster: {
+      gold: 'Nanda',
+      mid: 'Rizky',
+      exp: 'Gilang',
+      jungle: 'Bayu',
+      roam: 'Shane',
+    },
+  },
+  TWIS: {
+    code: 'GEEK',
+    name: 'Geek Fam ID',
+    logo: ID_LOGO('geek-500.png'),
+    colors: ['#F59E0B', '#111111'],
+    roster: {
+      gold: 'Kevin',
+      mid: 'Agung',
+      exp: 'Farhan',
+      jungle: 'Dimas',
+      roam: 'Frenzy',
+    },
+  },
+};
+/** In the league's teams but not in this week's matches. */
+const ID_EXTRA_TEAMS = [
+  {
+    code: 'NAVI',
+    name: 'NAVI',
+    logo: ID_LOGO('NAVI-2.png'),
+    colors: ['#FDD835', '#0A0A0A'] as [string, string],
+    roster: {
+      gold: 'Andri',
+      mid: 'Fajar',
+      exp: 'Rivaldo',
+      jungle: 'Ihsan',
+      roam: 'Aprho',
+    },
+  },
+];
+
+const ID: League = {
+  slug: 'mpl-id-s18',
+  short: 'MPL ID',
+  region: 'Indonesia',
+  country: 'ID',
+  playerSlugPrefix: 'id-',
+  startDay: -57,
+  prizePool: '500,000 USD',
+  description:
+    'Regular season, week 8. Demo data: the MPL PH S18 week 8 games replayed with MPL Indonesia teams and rosters.',
+  colors: Object.fromEntries(
+    [...Object.values(ID_TEAMS), ...ID_EXTRA_TEAMS].map((team) => [
+      team.code,
+      team.colors,
+    ]),
+  ),
+  shiftMs: -60 * MINUTE,
+  liveOffsetsMin: [9, 4, 16],
+  liveViewers: [8_200, 12_400, 24_600],
+  liveThumb:
+    'https://qshjcszsvsgwpcgggkiv.supabase.co/storage/v1/object/public/media/match-thumbs/mpl-indonesia.jpg',
+  broadcasts: [
+    { language: 'en', share: 0.35 },
+    { language: 'id', share: 0.65 },
+  ],
+  venue: { name: 'Mahaka Square', city: 'Jakarta' },
+};
+
+/** The MPL PH dataset with every team and player swapped for its MPL ID seat. */
+function indonesiaFrom(ph: Dataset): Dataset {
+  const team = (code: string) => {
+    const mapped = ID_TEAMS[code];
+    if (!mapped) throw new Error(`no MPL ID team for ${code}`);
+    return mapped;
+  };
+  const roleOf = new Map(
+    ph.players.map((p) => [`${p.team}:${p.nickname}`, p.role]),
+  );
+  const nickname = (code: string, phNickname: string): string => {
+    const role = roleOf.get(`${code}:${phNickname}`);
+    if (!role || role === 'flex') {
+      throw new Error(`no role for ${code} ${phNickname}`);
+    }
+    return team(code).roster[role];
+  };
+  const extra = ID_EXTRA_TEAMS.map((t) => ({ ...t, phCode: null }));
+  return {
+    ...ph,
+    league: 'MPL Indonesia',
+    source: `${ph.source} (rosters swapped for MPL Indonesia demo data)`,
+    teams: [
+      ...ph.teams.map((t) => ({
+        code: team(t.code).code,
+        name: team(t.code).name,
+        logo_url: team(t.code).logo,
+      })),
+      ...extra.map((t) => ({ code: t.code, name: t.name, logo_url: t.logo })),
+    ],
+    players: [
+      ...ph.players.map((p) => ({
+        ...p,
+        team: team(p.team).code,
+        nickname: nickname(p.team, p.nickname),
+      })),
+      ...extra.flatMap((t) =>
+        Object.entries(t.roster).map(([role, nick]) => ({
+          nickname: nick,
+          team: t.code,
+          role: role as Dataset['players'][number]['role'],
+          heroes: [],
+        })),
+      ),
+    ],
+    matches: ph.matches.map((m) => ({
+      ...m,
+      teams: [team(m.teams[0]).code, team(m.teams[1]).code],
+      data_slug: m.data_slug ? `id-${m.data_slug}` : null,
+      games: m.games.map((g) => ({
+        ...g,
+        winner: team(g.winner).code,
+        sides: g.sides.map((side) => ({
+          ...side,
+          team: team(side.team).code,
+          players: side.players.map((p) => ({
+            ...p,
+            nickname: nickname(side.team, p.nickname),
+          })),
+        })),
+      })),
+    })),
+  };
+}
+
+/** Both leagues must fit side by side before anything is deleted. */
+function assertLeaguesFit(leagues: Array<[League, Dataset]>): void {
+  const teamSlugs = new Set<string>();
+  const playerSlugs = new Set<string>();
+  for (const [league, data] of leagues) {
+    for (const team of data.teams) {
+      const slug = slugify(team.name);
+      if (teamSlugs.has(slug)) throw new Error(`duplicate team slug ${slug}`);
+      teamSlugs.add(slug);
+    }
+    for (const player of data.players) {
+      const slug = slugify(
+        `${league.playerSlugPrefix}${player.team}-${player.nickname}`,
+      );
+      if (playerSlugs.has(slug)) {
+        throw new Error(`duplicate player slug ${slug}`);
+      }
+      playerSlugs.add(slug);
+    }
+  }
+}
+
 /** "Thursday, 8 October 2026" → sortable day key. */
 const dayKey = (date: string): number => Date.parse(date.replace(/^\w+, /, ''));
 
@@ -174,52 +474,30 @@ function assertSafeTarget(): void {
   }
 }
 
-async function main(): Promise<void> {
-  assertSafeTarget();
-  const data = readJson<Dataset>('mpl-ph-s18-w8.json');
-  const catalog = readJson<Catalog>('mlbb-catalog.json');
-  console.log(
-    `Seeding ${data.league} S${data.season} week ${data.week} (${data.source})...`,
-  );
-
-  // ---- replace the catalog ----
-  const oldMatches = (
-    await prisma.match.findMany({ select: { id: true } })
-  ).map((m) => m.id);
-  const oldEntities = [
-    ...(await prisma.team.findMany({ select: { id: true } })),
-    ...(await prisma.player.findMany({ select: { id: true } })),
-    ...(await prisma.tournament.findMany({ select: { id: true } })),
-  ].map((row) => row.id);
-  // Demo purchases block match deletes (Restrict); payments cascade from orders.
-  await prisma.ticket.deleteMany({ where: { match_id: { in: oldMatches } } });
-  await prisma.ticketOrder.deleteMany({
-    where: { match_id: { in: oldMatches } },
-  });
-  await prisma.video.deleteMany({}); // media assets survive (SET NULL)
-  await prisma.favorite.deleteMany({
-    where: { entity_id: { in: [...oldEntities, ...oldMatches] } },
-  });
-  await prisma.match.deleteMany({}); // games, stats, live data cascade
-  await prisma.player.deleteMany({});
-  await prisma.team.deleteMany({});
-  await prisma.tournament.deleteMany({});
-
+/** One league: tournament, teams, players, matches (replays, live, upcoming) and replay videos. */
+async function seedLeague(
+  league: League,
+  data: Dataset,
+  catalog: Catalog,
+): Promise<{
+  live: string[];
+  counts: Record<string, number>;
+}> {
   // ---- tournament, teams, players ----
   const days = [...new Set(data.matches.map((m) => dayKey(m.date)))].sort(
     (a, b) => a - b,
   );
   const tournament = await prisma.tournament.create({
     data: {
-      slug: `mpl-ph-s${data.season}`,
+      slug: league.slug,
       name: `${data.league} Season ${data.season}`,
       status: 'ongoing',
-      region: 'Philippines',
-      start_date: new Date(manila(-50, '12:00 AM')),
-      end_date: new Date(manila(40, '12:00 AM')),
-      prize_pool: null,
+      region: league.region,
+      start_date: new Date(manila(league.startDay, '12:00 AM')),
+      end_date: new Date(manila(league.startDay + 90, '12:00 AM')),
+      prize_pool: league.prizePool,
       featured: true,
-      description: `Regular season, week ${data.week}. Real match data from ph-mpl.com: rosters, heroes, builds, emblems, talents and item sequences.`,
+      description: league.description,
       logo_url: null,
     },
   });
@@ -227,7 +505,7 @@ async function main(): Promise<void> {
   const teamIds = new Map<string, string>();
   const teamNames: Record<string, string> = {};
   for (const team of data.teams) {
-    const [primary, secondary] = TEAM_COLORS[team.code] ?? [
+    const [primary, secondary] = league.colors[team.code] ?? [
       '#444444',
       '#DDDDDD',
     ];
@@ -236,7 +514,7 @@ async function main(): Promise<void> {
         slug: slugify(team.name),
         name: team.name,
         short_name: team.code,
-        region: 'Philippines',
+        region: league.region,
         color_primary: primary,
         color_secondary: secondary,
         description: `${team.name} — ${data.league} Season ${data.season}.`,
@@ -257,10 +535,12 @@ async function main(): Promise<void> {
   for (const player of data.players) {
     const row = await prisma.player.create({
       data: {
-        slug: slugify(`${player.team}-${player.nickname}`),
+        slug: slugify(
+          `${league.playerSlugPrefix}${player.team}-${player.nickname}`,
+        ),
         nickname: player.nickname,
         role: player.role,
-        country: 'PH',
+        country: league.country,
         team_id: teamId(player.team),
         photo_url: null,
       },
@@ -501,7 +781,9 @@ async function main(): Promise<void> {
     };
 
     if (role === 'replay') {
-      const scheduled = manila(-1, match.time);
+      const scheduled = new Date(
+        manila(-1, match.time).getTime() + league.shiftMs,
+      );
       const winner =
         match.games.filter((g) => g.winner === match.teams[0]).length >= 2
           ? a
@@ -537,9 +819,13 @@ async function main(): Promise<void> {
     } else if (role === 'live') {
       const slot = live.length;
       const offset =
-        (LIVE_OFFSETS_MIN[slot % LIVE_OFFSETS_MIN.length] ?? 5) * MINUTE;
+        (league.liveOffsetsMin[slot % league.liveOffsetsMin.length] ?? 5) *
+        MINUTE;
       const startedAt = new Date(Date.now() - offset);
       const isFeatured = match === featured;
+      const viewers = isFeatured
+        ? league.liveViewers[2]
+        : league.liveViewers[slot % 2];
       const row = await prisma.match.create({
         data: {
           ...base,
@@ -549,12 +835,12 @@ async function main(): Promise<void> {
           game_number: 1,
           // The broadcast went on air a while ago (the series loops); e2e
           // fixtures that start "now" rank as the latest live matches.
-          scheduled_at: new Date(Date.now() - 2 * 60 * MINUTE),
-          started_at: new Date(Date.now() - 115 * MINUTE),
+          scheduled_at: new Date(Date.now() - 2 * 60 * MINUTE + league.shiftMs),
+          started_at: new Date(Date.now() - 115 * MINUTE + league.shiftMs),
           featured: isFeatured,
-          viewer_count: isFeatured ? LIVE_VIEWERS[2] : LIVE_VIEWERS[slot % 2],
+          viewer_count: viewers,
           stream_url: SEED_STREAM_URL,
-          thumbnail_url: SEED_LIVE_THUMB,
+          thumbnail_url: league.liveThumb,
         },
       });
       await prisma.matchGameRecording.createMany({
@@ -579,17 +865,11 @@ async function main(): Promise<void> {
         },
       });
       await prisma.matchBroadcast.createMany({
-        data: [
-          { language: 'en' as const, share: 0.35 },
-          { language: 'tl' as const, share: 0.65 },
-        ].map((feed) => ({
+        data: league.broadcasts.map((feed) => ({
           match_id: row.id,
           language: feed.language,
           stream_url: SEED_STREAM_URL,
-          viewer_count: Math.round(
-            (isFeatured ? LIVE_VIEWERS[2] : LIVE_VIEWERS[slot % 2]) *
-              feed.share,
-          ),
+          viewer_count: Math.round(viewers * feed.share),
         })),
       });
       live.push(row.id);
@@ -598,15 +878,17 @@ async function main(): Promise<void> {
         data: {
           ...base,
           status: 'scheduled',
-          scheduled_at: manila(1, match.time),
+          scheduled_at: new Date(
+            manila(1, match.time).getTime() + league.shiftMs,
+          ),
           thumbnail_url: seedImage(`match-${match.teams.join('-')}`),
         },
       });
       await prisma.matchTicketConfig.create({
         data: {
           match_id: row.id,
-          venue_name: 'Studio MPL PH, Shangri-La Plaza',
-          venue_city: 'Mandaluyong',
+          venue_name: league.venue.name,
+          venue_city: league.venue.city,
           price_usd: 12,
           // An IDR price enables QRIS / bank VA next to crypto.
           price_idr: 190_000,
@@ -630,7 +912,7 @@ async function main(): Promise<void> {
     )) {
       await prisma.video.create({
         data: {
-          title: `${match.teamA.short_name} vs ${match.teamB.short_name} — Game ${game.game_number} | MPL PH S${data.season} Week ${data.week}`,
+          title: `${match.teamA.short_name} vs ${match.teamB.short_name} — Game ${game.game_number} | ${league.short} S${data.season} Week ${data.week}`,
           type: 'replay',
           url: SEED_STREAM_URL,
           thumbnail_url: seedImage(`video-${match.id}-${game.game_number}`),
@@ -644,6 +926,60 @@ async function main(): Promise<void> {
       videoCount += 1;
     }
   }
+
+  return {
+    live,
+    counts: {
+      teams: data.teams.length,
+      players: data.players.length,
+      replays: replays.length,
+      replayGames: replays.reduce((n, r) => n + r.games.length, 0),
+      live: live.length,
+      upcoming: upcoming.length,
+      videos: videoCount,
+    },
+  };
+}
+
+async function main(): Promise<void> {
+  assertSafeTarget();
+  const data = readJson<Dataset>('mpl-ph-s18-w8.json');
+  const catalog = readJson<Catalog>('mlbb-catalog.json');
+  const idData = indonesiaFrom(data);
+  assertLeaguesFit([
+    [PH, data],
+    [ID, idData],
+  ]);
+  console.log(
+    `Seeding ${data.league} and ${idData.league} S${data.season} week ${data.week} (${data.source})...`,
+  );
+
+  // ---- replace the catalog ----
+  const oldMatches = (
+    await prisma.match.findMany({ select: { id: true } })
+  ).map((m) => m.id);
+  const oldEntities = [
+    ...(await prisma.team.findMany({ select: { id: true } })),
+    ...(await prisma.player.findMany({ select: { id: true } })),
+    ...(await prisma.tournament.findMany({ select: { id: true } })),
+  ].map((row) => row.id);
+  // Demo purchases block match deletes (Restrict); payments cascade from orders.
+  await prisma.ticket.deleteMany({ where: { match_id: { in: oldMatches } } });
+  await prisma.ticketOrder.deleteMany({
+    where: { match_id: { in: oldMatches } },
+  });
+  await prisma.video.deleteMany({}); // media assets survive (SET NULL)
+  await prisma.favorite.deleteMany({
+    where: { entity_id: { in: [...oldEntities, ...oldMatches] } },
+  });
+  await prisma.match.deleteMany({}); // games, stats, live data cascade
+  await prisma.player.deleteMany({});
+  await prisma.team.deleteMany({});
+  await prisma.tournament.deleteMany({});
+
+  const ph = await seedLeague(PH, data, catalog);
+  const id = await seedLeague(ID, idData, catalog);
+  const live = [...ph.live, ...id.live];
 
   // ---- admin profile ----
   const adminId =
@@ -752,19 +1088,7 @@ async function main(): Promise<void> {
 
   console.log(
     'Seed complete:',
-    JSON.stringify(
-      {
-        teams: data.teams.length,
-        players: data.players.length,
-        replays: replays.length,
-        replayGames: replays.reduce((n, r) => n + r.games.length, 0),
-        live: live.length,
-        upcoming: upcoming.length,
-        videos: videoCount,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({ [PH.slug]: ph.counts, [ID.slug]: id.counts }, null, 2),
   );
 }
 
