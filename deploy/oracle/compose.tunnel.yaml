@@ -1,0 +1,12 @@
+# Cloudflare Tunnel (or any other local reverse proxy) instead of Caddy.
+# The API listens on the VM loopback only. Caddy is not started.
+#
+# Turn on by setting ORACLE_TUNNEL=1 in deploy/oracle/.env.
+# deploy.sh, logs.sh, and rollback.sh pick this file up automatically.
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:3001:3001"
+  caddy:
+    profiles: ["tunnel-disabled"]

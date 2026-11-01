@@ -1,0 +1,171 @@
+# Production stack for one Oracle Cloud Always Free ARM VM (linux/arm64).
+# Postgres stays on Supabase. This file does not replace docker-compose.yml
+# or the Railway config.
+#
+# Image tag thumbz-server:oracle is the rollback contract (deploy.sh /
+# rollback.sh). Build runs on the VM, so Prisma's `native` engine is the
+# arm64 binary. See README.md.
+
+name: thumbz-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+    pull_policy: missing
+    restart: unless-stopped
+    # Not published. Reachable only as redis:6379 on the data network.
+    # noeviction: BullMQ must not lose jobs to Redis eviction.
+    # protected-mode off is safe here because nothing outside the network
+    # can route to this container. The official entrypoint is not relied on.
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-384mb}
+      - --maxmemory-policy
+      - noeviction
+      - --tcp-keepalive
+      - "60"
+    volumes:
+      - redis-data:/data
+    networks:
+      - data
+    mem_limit: 512m
+    stop_grace_period: 10s
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  migrate:
+    image: thumbz-server:oracle
+    platform: linux/arm64
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: "no"
+    command: ["/app/node_modules/.bin/prisma", "migrate", "deploy"]
+    networks:
+      - data
+    mem_limit: 512m
+    logging: *logging
+    # The image healthcheck probes HTTP, which this one-shot process does not serve.
+    healthcheck:
+      disable: true
+
+  api:
+    image: thumbz-server:oracle
+    platform: linux/arm64
+    # Local tag only. deploy.sh builds it via the migrate service. Never pull
+    # this name from a registry (it is not published).
+    pull_policy: never
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # Forces the in-compose Redis even if .env still has a Railway URL.
+      REDIS_URL: redis://redis:6379
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - web
+      - data
+    # No host port. Caddy is the only public entry, unless compose.tunnel.yaml
+    # publishes 127.0.0.1:3001 for cloudflared.
+    expose:
+      - "3001"
+    mem_limit: 768m
+    stop_grace_period: 25s
+    logging: *logging
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+  worker:
+    image: thumbz-server:oracle
+    platform: linux/arm64
+    pull_policy: never
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+    command: ["node", "dist/worker.js"]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    mem_limit: 512m
+    stop_grace_period: 30s
+    logging: *logging
+    healthcheck:
+      disable: true
+
+  caddy:
+    image: caddy:2-alpine
+    platform: linux/arm64
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN in deploy/oracle/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/oracle/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - web
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 128m
+    logging: *logging
+
+networks:
+  # Caddy and the API. Redis is not on this network.
+  web:
+  # API, worker, migrate, Redis. Has egress (Supabase, payment APIs).
+  data:
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,15 @@
+# API_DOMAIN and ACME_EMAIL come from the caddy service environment.
+# Certificates are stored in the caddy-data volume (/data).
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:3001 {
+		# Socket.IO uses WebSocket upgrades and long-polling on /socket.io/
+		# (namespace /rt). Caddy proxies the upgrade by default. Flush so
+		# long-poll responses are not held in the proxy buffer.
+		flush_interval -1
+	}
+}

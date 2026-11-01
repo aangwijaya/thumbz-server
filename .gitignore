@@ -38,5 +38,8 @@ skills-lock.json
 # Private deployment notes
 /docs/DEPLOYMENT.md
 
+# Commit recorded on the VM by deploy/oracle/deploy.sh
+deploy/oracle/.previous-sha
+
 # Raw pages cached by scripts/data (never committed)
 /data-cache

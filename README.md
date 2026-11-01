@@ -152,3 +152,8 @@ before each release):
 
 Required production variables are validated at boot; see
 `.env.production.example`.
+
+The same image can run on an Oracle Cloud Always Free ARM VM (Caddy, Redis,
+API, worker; Postgres stays on Supabase). That kit is
+[`deploy/oracle/README.md`](deploy/oracle/README.md). The Railway files
+above stay as they are.

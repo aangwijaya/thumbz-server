@@ -1,0 +1,87 @@
+# Deploys the Oracle VM on push to main, only when the owner has stored
+# SSH secrets. Otherwise the gate job succeeds and the deploy job is
+# skipped, so this file cannot fail the existing CI workflow.
+
+name: Deploy Oracle
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-deploy
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Check deploy secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    env:
+      ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+      ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+      ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+    steps:
+      - name: Skip unless the VM secrets are configured
+        id: check
+        run: |
+          set -euo pipefail
+          if [[ -z "${ORACLE_SSH_HOST}" || -z "${ORACLE_SSH_USER}" || -z "${ORACLE_SSH_KEY}" ]]; then
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::ORACLE_SSH_HOST, ORACLE_SSH_USER, and ORACLE_SSH_KEY are not all set. Deploy skipped."
+            exit 0
+          fi
+          echo "enabled=true" >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    name: Deploy over SSH
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+      ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+      ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+      ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+      ORACLE_SSH_KNOWN_HOSTS: ${{ secrets.ORACLE_SSH_KNOWN_HOSTS }}
+      ORACLE_DEPLOY_PATH: ${{ vars.ORACLE_DEPLOY_PATH }}
+    steps:
+      - name: Run deploy.sh on the VM
+        run: |
+          set -euo pipefail
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${ORACLE_SSH_KEY}" > "${HOME}/.ssh/oracle_deploy"
+          chmod 600 "${HOME}/.ssh/oracle_deploy"
+          port="${ORACLE_SSH_PORT:-22}"
+          if [[ ! "${port}" =~ ^[0-9]+$ ]]; then
+            echo "ORACLE_SSH_PORT must be a number." >&2
+            exit 1
+          fi
+          path="${ORACLE_DEPLOY_PATH:-/opt/thumbz/thumbz-server}"
+          ssh_opts=(
+            -i "${HOME}/.ssh/oracle_deploy"
+            -p "${port}"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o ConnectTimeout=20
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=40
+          )
+          if [[ -n "${ORACLE_SSH_KNOWN_HOSTS}" ]]; then
+            printf '%s\n' "${ORACLE_SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+            chmod 600 "${HOME}/.ssh/known_hosts"
+            ssh_opts+=(-o StrictHostKeyChecking=yes)
+          else
+            echo "::notice::ORACLE_SSH_KNOWN_HOSTS is unset. The first connection uses StrictHostKeyChecking=accept-new."
+            ssh_opts+=(-o StrictHostKeyChecking=accept-new)
+          fi
+          remote_path="$(printf '%q' "${path}")"
+          ssh "${ssh_opts[@]}" "${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}" \
+            "set -euo pipefail; cd ${remote_path}; DEPLOY_BRANCH=main bash deploy/oracle/deploy.sh"

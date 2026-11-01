@@ -1,0 +1,12 @@
+[Unit]
+Description=Allow HTTP and HTTPS through the Oracle Cloud image firewall
+After=docker.service netfilter-persistent.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/thumbz-open-web-ports
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
