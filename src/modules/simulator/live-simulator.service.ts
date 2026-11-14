@@ -26,6 +26,10 @@ const BACKFILL_STEP_SECONDS = 30;
 const ROLL_CHECK_MS = 10 * 60_000;
 const ROLL_WITHIN_MS = 20 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
+/** Live series older than this are re-dated so the rundown stays on today. */
+const LIVE_ROLL_AFTER_MS = 6 * 60 * 60_000;
+const LIVE_START_BACKDATE_MS = 10 * 60_000;
+const LIVE_SCHEDULE_BACKDATE_MS = 15 * 60_000;
 
 interface Replay {
   bestOf: number;
@@ -374,6 +378,33 @@ export class LiveSimulatorService {
     }
     if (soon.length > 0) {
       this.logger.log(`moved ${soon.length} upcoming matches a day later`);
+    }
+
+    // Live series replay forever, so their match-level start would grow older
+    // than a day and fall out of the homepage rundown. Keep them "today";
+    // per-game start times (the clock and stats) are untouched.
+    const staleLive = await this.prisma.match.findMany({
+      where: {
+        status: 'live',
+        OR: [
+          { started_at: null },
+          { started_at: { lt: new Date(now - LIVE_ROLL_AFTER_MS) } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (staleLive.length > 0) {
+      await this.prisma.match.updateMany({
+        where: { id: { in: staleLive.map((match) => match.id) } },
+        data: {
+          started_at: new Date(now - LIVE_START_BACKDATE_MS),
+          scheduled_at: new Date(now - LIVE_SCHEDULE_BACKDATE_MS),
+          ended_at: null,
+        },
+      });
+      this.logger.log(
+        `re-dated ${staleLive.length} live matches for today's rundown`,
+      );
     }
   }
 
