@@ -33,9 +33,6 @@ const DATA_DIR = join(__dirname, 'data');
 const SEED_STREAM_URL = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const SEED_LIVE_THUMB =
   'https://qshjcszsvsgwpcgggkiv.supabase.co/storage/v1/object/public/media/match-thumbs/mpl-philippines.jpg';
-const seedImage = (seed: string, width = 640, height = 360): string =>
-  `https://picsum.photos/seed/${encodeURIComponent(seed)}/${width}/${height}`;
-
 /** Manila time (UTC+8): the league's calendar. */
 const PH_OFFSET_MS = 8 * 3_600_000;
 const MINUTE = 60_000;
@@ -161,6 +158,15 @@ interface League {
   broadcasts: Array<{ language: 'en' | 'id' | 'tl'; share: number }>;
   venue: { name: string; city: string };
 }
+
+/** Self-hosted demo art (the public media bucket), so thumbnails never depend on a random image host. */
+const SEED_MEDIA =
+  'https://qshjcszsvsgwpcgggkiv.supabase.co/storage/v1/object/public/media';
+const videoThumb = (league: League, game: number): string => {
+  const prefix = league.slug.startsWith('mpl-id') ? 'mpl-id' : 'mpl-ph';
+  const n = Math.min(5, Math.max(1, game));
+  return `${SEED_MEDIA}/video-thumbs/${prefix}-g${n}.jpg`;
+};
 
 const PH: League = {
   slug: 'mpl-ph-s18',
@@ -797,7 +803,7 @@ async function seedLeague(
           winner_team_id: winner,
           scheduled_at: scheduled,
           started_at: new Date(scheduled.getTime() + 5 * MINUTE),
-          thumbnail_url: seedImage(`match-${match.data_slug}`),
+          thumbnail_url: league.liveThumb,
         },
       });
       let start = new Date(scheduled.getTime() + 5 * MINUTE);
@@ -881,7 +887,7 @@ async function seedLeague(
           scheduled_at: new Date(
             manila(1, match.time).getTime() + league.shiftMs,
           ),
-          thumbnail_url: seedImage(`match-${match.teams.join('-')}`),
+          thumbnail_url: league.liveThumb,
         },
       });
       await prisma.matchTicketConfig.create({
@@ -915,7 +921,7 @@ async function seedLeague(
           title: `${match.teamA.short_name} vs ${match.teamB.short_name} — Game ${game.game_number} | ${league.short} S${data.season} Week ${data.week}`,
           type: 'replay',
           url: SEED_STREAM_URL,
-          thumbnail_url: seedImage(`video-${match.id}-${game.game_number}`),
+          thumbnail_url: videoThumb(league, game.game_number),
           duration_seconds: game.duration_seconds,
           match_id: match.id,
           game_number: game.game_number,
